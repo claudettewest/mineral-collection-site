@@ -102,6 +102,85 @@ app.post('/api/minerals', (req, res) => {
     });
 });
 
+app.put('/api/minerals/:id', (req, res) => {
+    const { specimenId, name, type, group, subgroup, date, origin, description, photo } = req.body;
+    const photos = normalizePhotos(req.body.photos, photo);
+
+    if (!specimenId || !name || !type || !group || !subgroup || !date || !origin || !description) {
+        return res.status(400).json({ error: 'Missing required mineral fields' });
+    }
+
+    if (!photos.length) {
+        return res.status(400).json({ error: 'At least one photo is required' });
+    }
+
+    const oversizedPhoto = photos.find((item) => item.size > MAX_PHOTO_SIZE_BYTES);
+    if (oversizedPhoto) {
+        return res.status(400).json({ error: `${oversizedPhoto.name || 'Photo'} exceeds the 5 GB limit` });
+    }
+
+    const sql = `
+        UPDATE minerals
+        SET specimenId = ?,
+            name = ?,
+            type = ?,
+            groupName = ?,
+            subgroup = ?,
+            date = ?,
+            origin = ?,
+            description = ?,
+            photo = ?,
+            photos = ?
+        WHERE id = ?
+    `;
+
+    db.run(sql, [
+        specimenId,
+        name,
+        type,
+        group,
+        subgroup,
+        date,
+        origin,
+        description,
+        photos[0]?.dataUrl || '',
+        JSON.stringify(photos),
+        req.params.id,
+    ], function (error) {
+        if (error) {
+            console.error('Error updating mineral:', error);
+            return res.status(500).json({ error: 'Database error' });
+        }
+
+        if (!this.changes) {
+            return res.status(404).json({ error: 'Mineral not found' });
+        }
+
+        db.get('SELECT * FROM minerals WHERE id = ?', [req.params.id], (err, row) => {
+            if (err) {
+                console.error('Error fetching updated mineral:', err);
+                return res.status(500).json({ error: 'Database error' });
+            }
+            res.json(row);
+        });
+    });
+});
+
+app.delete('/api/minerals/:id', (req, res) => {
+    db.run('DELETE FROM minerals WHERE id = ?', [req.params.id], function (error) {
+        if (error) {
+            console.error('Error deleting mineral:', error);
+            return res.status(500).json({ error: 'Database error' });
+        }
+
+        if (!this.changes) {
+            return res.status(404).json({ error: 'Mineral not found' });
+        }
+
+        res.status(204).send();
+    });
+});
+
 function normalizePhotos(photos, fallbackPhoto) {
     if (Array.isArray(photos)) {
         return photos

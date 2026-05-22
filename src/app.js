@@ -13,10 +13,8 @@
     backButton.id = 'back-button';
     backButton.style.display = 'none';
     backButton.addEventListener('click', () => {
-        landingPage.style.display = '';
-        formContainer.style.display = 'none';
-        listContainer.style.display = 'none';
-        backButton.style.display = 'none';
+        mineralForm.clear();
+        showLanding();
     });
 
     document.body.insertBefore(backButton, document.querySelector('main'));
@@ -25,23 +23,40 @@
     listContainer.appendChild(mineralList.render());
 
     addButton.addEventListener('click', () => {
+        mineralForm.clear();
+        showForm();
+    });
+
+    viewEntriesButton.addEventListener('click', () => {
+        showList();
+    });
+
+    function showLanding() {
+        landingPage.style.display = '';
+        formContainer.style.display = 'none';
+        listContainer.style.display = 'none';
+        backButton.style.display = 'none';
+    }
+
+    function showForm() {
         landingPage.style.display = 'none';
         formContainer.style.display = '';
         listContainer.style.display = 'none';
         backButton.style.display = '';
-    });
+    }
 
-    viewEntriesButton.addEventListener('click', () => {
+    function showList() {
         landingPage.style.display = 'none';
         formContainer.style.display = 'none';
         listContainer.style.display = '';
         backButton.style.display = '';
-    });
+    }
 
     mineralForm.onSubmit(async (mineral) => {
         try {
-            const response = await fetch('/api/minerals', {
-                method: 'POST',
+            const isEdit = Boolean(mineral.id);
+            const response = await fetch(isEdit ? `/api/minerals/${mineral.id}` : '/api/minerals', {
+                method: isEdit ? 'PUT' : 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(mineral),
             });
@@ -52,14 +67,41 @@
             }
 
             const savedMineral = await response.json();
-            mineralList.addMineral(savedMineral);
+            if (isEdit) {
+                mineralList.updateMineral(savedMineral);
+            } else {
+                mineralList.addMineral(savedMineral);
+            }
             mineralForm.clear();
-            landingPage.style.display = '';
-            formContainer.style.display = 'none';
-            listContainer.style.display = 'none';
-            backButton.style.display = 'none';
+            showList();
         } catch (error) {
             console.error('Error saving mineral:', error);
+        }
+    });
+
+    mineralList.onEdit((mineral) => {
+        mineralForm.edit(mineral);
+        showForm();
+    });
+
+    mineralList.onDelete(async (mineral) => {
+        if (!confirm(`Delete ${mineral.name}?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/minerals/${mineral.id}`, {
+                method: 'DELETE',
+            });
+
+            if (!response.ok) {
+                console.error('Failed to delete mineral');
+                return;
+            }
+
+            mineralList.removeMineral(mineral.id);
+        } catch (error) {
+            console.error('Error deleting mineral:', error);
         }
     });
 

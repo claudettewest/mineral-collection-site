@@ -192,6 +192,34 @@ a:hover {
     overflow-x: auto;
 }
 
+.row-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.icon-button {
+    display: inline-grid;
+    place-items: center;
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    min-height: 38px;
+    padding: 0;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+.icon-button.danger {
+    background-color: #8c2f3d;
+}
+
+.icon-button.danger:hover,
+.icon-button.danger:focus-visible {
+    background-color: #a33b4c;
+}
+
 #back-button {
     position: fixed;
     top: 20px;
@@ -296,6 +324,10 @@ a:hover {
     .mineral-thumbnail-link {
         width: 64px;
         height: 64px;
+    }
+
+    .row-actions {
+        justify-content: flex-start;
     }
 }
 

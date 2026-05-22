@@ -1,6 +1,8 @@
 ﻿class MineralList {
     constructor() {
         this.minerals = [];
+        this.onEditCallback = null;
+        this.onDeleteCallback = null;
     }
 
     render() {
@@ -17,6 +19,7 @@
                         <th>Group</th>
                         <th>Subgroup</th>
                         <th>Images</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -51,7 +54,23 @@
             <td data-label="Group">${this._escape(groupValue)}</td>
             <td data-label="Subgroup">${this._escape(mineral.subgroup)}</td>
             <td data-label="Images">${imageMarkup}</td>
+            <td data-label="Actions">
+                <div class="row-actions">
+                    <button class="icon-button" type="button" data-action="edit" aria-label="Edit ${this._escape(mineral.name)}" title="Edit">&#9998;</button>
+                    <button class="icon-button danger" type="button" data-action="delete" aria-label="Delete ${this._escape(mineral.name)}" title="Delete">&#128465;</button>
+                </div>
+            </td>
         `;
+        row.querySelector('[data-action="edit"]').addEventListener('click', () => {
+            if (this.onEditCallback) {
+                this.onEditCallback(mineral);
+            }
+        });
+        row.querySelector('[data-action="delete"]').addEventListener('click', () => {
+            if (this.onDeleteCallback) {
+                this.onDeleteCallback(mineral);
+            }
+        });
 
         if (prepend && this.body.firstChild) {
             this.body.insertBefore(row, this.body.firstChild);
@@ -98,5 +117,25 @@
         const altText = `${mineralName} thumbnail ${index + 1}`;
         const title = name ? ` title="${this._escape(name)}"` : '';
         return `<a class="mineral-thumbnail-link" href="${this._escape(src)}" target="_blank" rel="noopener noreferrer"${title}><img class="mineral-thumbnail" src="${this._escape(src)}" alt="${this._escape(altText)}" loading="lazy" /></a>`;
+    }
+
+    updateMineral(updatedMineral) {
+        this.minerals = this.minerals.map((mineral) => (
+            mineral.id === updatedMineral.id ? updatedMineral : mineral
+        ));
+        this.setMinerals(this.minerals);
+    }
+
+    removeMineral(id) {
+        this.minerals = this.minerals.filter((mineral) => mineral.id !== id);
+        this.setMinerals(this.minerals);
+    }
+
+    onEdit(callback) {
+        this.onEditCallback = callback;
+    }
+
+    onDelete(callback) {
+        this.onDeleteCallback = callback;
     }
 }

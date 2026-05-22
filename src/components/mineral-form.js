@@ -1,6 +1,7 @@
 ﻿class MineralForm {
     constructor() {
         this.onSubmitCallback = null;
+        this.editingMineral = null;
         this.MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024 * 1024;
         this.TYPE_OPTIONS = [
             'Element',
@@ -75,7 +76,8 @@
                 </label>
             </div>
             <div class="form-buttons">
-                <button type="submit">Save</button>
+                <button type="submit" data-role="submit">Save</button>
+                <button type="button" data-role="cancel-edit" style="display:none;">Cancel</button>
             </div>
         `;
 
@@ -94,6 +96,9 @@
         this.form.querySelector('input[name="photos"]').addEventListener('change', (event) => {
             this._validatePhotoSizes(event.target);
         });
+        this.form.querySelector('[data-role="cancel-edit"]').addEventListener('click', () => {
+            this.clear();
+        });
 
         return this.form;
     }
@@ -101,7 +106,7 @@
     _submitForm() {
         const photoInput = this.form.querySelector('input[name="photos"]');
         const photoFiles = Array.from(photoInput.files);
-        if (!photoFiles.length) {
+        if (!photoFiles.length && !this.editingMineral) {
             return;
         }
 
@@ -109,9 +114,15 @@
             return;
         }
 
-        Promise.all(photoFiles.map((file) => this._readPhoto(file)))
+        const existingPhotos = this.editingMineral ? this._getExistingPhotos(this.editingMineral) : [];
+        const photosPromise = photoFiles.length
+            ? Promise.all(photoFiles.map((file) => this._readPhoto(file)))
+            : Promise.resolve(existingPhotos);
+
+        photosPromise
             .then((photos) => {
                 const mineralData = {
+                    id: this.editingMineral?.id,
                     specimenId: this.form.querySelector('input[name="specimenId"]').value,
                     name: this.form.querySelector('input[name="name"]').value,
                     type: this.form.querySelector('select[name="type"]').value,
@@ -164,9 +175,47 @@
         this.onSubmitCallback = callback;
     }
 
+    edit(mineral) {
+        this.editingMineral = mineral;
+        this.form.querySelector('input[name="specimenId"]').value = mineral.specimenId || '';
+        this.form.querySelector('input[name="name"]').value = mineral.name || '';
+        this.form.querySelector('select[name="type"]').value = mineral.type || '';
+        this.form.querySelector('input[name="group"]').value = mineral.group || mineral.groupName || '';
+        this.form.querySelector('input[name="subgroup"]').value = mineral.subgroup || '';
+        this.form.querySelector('input[name="date"]').value = mineral.date || '';
+        this.form.querySelector('input[name="origin"]').value = mineral.origin || '';
+        this.form.querySelector('textarea[name="description"]').value = mineral.description || '';
+        this.form.querySelector('input[name="photos"]').required = false;
+        this.form.querySelector('[data-role="submit"]').textContent = 'Update';
+        this.form.querySelector('[data-role="cancel-edit"]').style.display = '';
+    }
+
     clear() {
         if (this.form) {
             this.form.reset();
+            this.editingMineral = null;
+            this.form.querySelector('input[name="photos"]').required = true;
+            this.form.querySelector('[data-role="submit"]').textContent = 'Save';
+            this.form.querySelector('[data-role="cancel-edit"]').style.display = 'none';
         }
+    }
+
+    _getExistingPhotos(mineral) {
+        if (Array.isArray(mineral.photos)) {
+            return mineral.photos;
+        }
+
+        if (mineral.photos) {
+            try {
+                const photos = JSON.parse(mineral.photos);
+                if (Array.isArray(photos)) {
+                    return photos;
+                }
+            } catch (error) {
+                console.error('Error parsing existing photos:', error);
+            }
+        }
+
+        return mineral.photo ? [{ dataUrl: mineral.photo, name: mineral.name }] : [];
     }
 }
