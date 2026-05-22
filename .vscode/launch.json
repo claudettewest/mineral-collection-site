@@ -2,11 +2,17 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Launch Edge",
-            "type": "msedge",
+            "name": "Launch Mineral Site",
+            "type": "node",
             "request": "launch",
-            "url": "http://localhost:3000",
-            "webRoot": "${workspaceFolder}"
+            "program": "${workspaceFolder}/server.js",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "serverReadyAction": {
+                "pattern": "Mineral collection server running at (http://localhost:[0-9]+)",
+                "uriFormat": "%s",
+                "action": "openExternally"
+            }
         }
     ]
 }
