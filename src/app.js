@@ -1,11 +1,14 @@
 ﻿document.addEventListener('DOMContentLoaded', () => {
     const mineralForm = new MineralForm();
     const mineralList = new MineralList();
+    const uploadForm = new UploadForm();
 
     const landingPage = document.getElementById('landing-page');
     const addButton = document.getElementById('add-specimen-button');
     const viewEntriesButton = document.getElementById('view-entries-button');
+    const uploadButton = document.getElementById('upload-button');
     const formContainer = document.getElementById('form-container');
+    const uploadContainer = document.getElementById('upload-container');
     const listContainer = document.getElementById('list-container');
 
     const backButton = document.createElement('button');
@@ -14,12 +17,14 @@
     backButton.style.display = 'none';
     backButton.addEventListener('click', () => {
         mineralForm.clear();
+        uploadForm.clear();
         showLanding();
     });
 
     document.body.insertBefore(backButton, document.querySelector('main'));
 
     formContainer.appendChild(mineralForm.render());
+    uploadContainer.appendChild(uploadForm.render());
     listContainer.appendChild(mineralList.render());
 
     addButton.addEventListener('click', () => {
@@ -31,9 +36,15 @@
         showList();
     });
 
+    uploadButton.addEventListener('click', () => {
+        uploadForm.clear();
+        showUpload();
+    });
+
     function showLanding() {
         landingPage.style.display = '';
         formContainer.style.display = 'none';
+        uploadContainer.style.display = 'none';
         listContainer.style.display = 'none';
         backButton.style.display = 'none';
     }
@@ -41,6 +52,15 @@
     function showForm() {
         landingPage.style.display = 'none';
         formContainer.style.display = '';
+        uploadContainer.style.display = 'none';
+        listContainer.style.display = 'none';
+        backButton.style.display = '';
+    }
+
+    function showUpload() {
+        landingPage.style.display = 'none';
+        formContainer.style.display = 'none';
+        uploadContainer.style.display = '';
         listContainer.style.display = 'none';
         backButton.style.display = '';
     }
@@ -48,6 +68,7 @@
     function showList() {
         landingPage.style.display = 'none';
         formContainer.style.display = 'none';
+        uploadContainer.style.display = 'none';
         listContainer.style.display = '';
         backButton.style.display = '';
     }
@@ -79,6 +100,10 @@
         }
     });
 
+    uploadForm.onUploadComplete(() => {
+        refreshMinerals();
+    });
+
     mineralList.onEdit((mineral) => {
         mineralForm.edit(mineral);
         showForm();
@@ -105,8 +130,12 @@
         }
     });
 
-    fetch('/api/minerals')
-        .then((response) => response.json())
-        .then((minerals) => mineralList.setMinerals(minerals))
-        .catch((error) => console.error('Error loading minerals:', error));
+    function refreshMinerals() {
+        return fetch('/api/minerals')
+            .then((response) => response.json())
+            .then((minerals) => mineralList.setMinerals(minerals))
+            .catch((error) => console.error('Error loading minerals:', error));
+    }
+
+    refreshMinerals();
 });

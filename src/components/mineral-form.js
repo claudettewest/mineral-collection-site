@@ -18,7 +18,7 @@
             {
                 title: 'Basic Data',
                 fields: [
-                    { name: 'id', label: 'ID', readonly: true },
+                    { name: 'id', label: 'ID', disabled: true },
                     { name: 'specimenId', label: 'Specimen Number', required: true },
                     { name: 'name', label: 'Name', required: true },
                     { name: 'date', label: 'Date', type: 'date', required: true },
@@ -26,7 +26,7 @@
                     { name: 'description', label: 'Description', multiline: true, required: true },
                     { name: 'gpsCoordinates', label: 'GPS Coordinates', required: true },
                     { name: 'observations', label: 'Observations', multiline: true, required: true },
-                    { name: 'createdAt', label: 'Created At', readonly: true },
+                    { name: 'createdAt', label: 'Created At', disabled: true },
                 ],
             },
             {
@@ -132,6 +132,7 @@
         this.form.querySelector('[data-role="cancel-edit"]').addEventListener('click', () => {
             this.clear();
         });
+        this._setGeneratedFieldsForNewRecord();
 
         return this.form;
     }
@@ -208,7 +209,7 @@
 
     edit(mineral) {
         this.editingMineral = mineral;
-        this.form.querySelector('input[name="id"]').value = mineral.id || '';
+        this.form.querySelector('input[name="id"]').value = this._formatId(mineral.id);
         this.form.querySelector('input[name="specimenId"]').value = mineral.specimenId || '';
         this.form.querySelector('input[name="name"]').value = mineral.name || '';
         this.form.querySelector('select[name="type"]').value = mineral.type || '';
@@ -231,8 +232,7 @@
         if (this.form) {
             this.form.reset();
             this.editingMineral = null;
-            this.form.querySelector('input[name="id"]').value = '';
-            this.form.querySelector('input[name="createdAt"]').value = '';
+            this._setGeneratedFieldsForNewRecord();
             this.form.querySelector('input[name="photos"]').required = false;
             this._resetSectionState();
             this.form.querySelector('[data-role="submit"]').textContent = 'Save';
@@ -274,9 +274,10 @@
     _renderField(field) {
         const required = field.required ? ' required' : '';
         const readonly = field.readonly ? ' readonly' : '';
+        const disabled = field.disabled ? ' disabled' : '';
         const multiple = field.multiple ? ' multiple' : '';
         const type = field.type || 'text';
-        let control = `<input type="${type}" name="${field.name}"${required}${readonly}${multiple} />`;
+        let control = `<input type="${type}" name="${field.name}"${required}${readonly}${disabled}${multiple} />`;
 
         if (type === 'file') {
             control = `<input type="file" name="${field.name}" accept="image/*"${required}${multiple} />`;
@@ -287,7 +288,7 @@
                 </select>
             `;
         } else if (field.multiline) {
-            control = `<textarea name="${field.name}"${required}${readonly}></textarea>`;
+            control = `<textarea name="${field.name}"${required}${readonly}${disabled}></textarea>`;
         }
 
         return `
@@ -311,5 +312,35 @@
         this.form.querySelectorAll('.form-section').forEach((section) => {
             section.open = section.querySelector('summary').textContent === 'Basic Data';
         });
+    }
+
+    _setGeneratedFieldsForNewRecord() {
+        this.form.querySelector('input[name="createdAt"]').value = new Date().toISOString();
+        this._loadNextId();
+    }
+
+    _loadNextId() {
+        fetch('/api/minerals/next-id')
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error('Unable to load next mineral ID');
+                }
+                return response.json();
+            })
+            .then((data) => {
+                if (!this.editingMineral) {
+                    this.form.querySelector('input[name="id"]').value = data.formattedId || this._formatId(data.nextId);
+                }
+            })
+            .catch((error) => {
+                console.error('Error loading next mineral ID:', error);
+                if (!this.editingMineral) {
+                    this.form.querySelector('input[name="id"]').value = '';
+                }
+            });
+    }
+
+    _formatId(id) {
+        return String(id || '').padStart(4, '0');
     }
 }

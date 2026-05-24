@@ -12,6 +12,12 @@
     --button-hover: #3c8680;
 }
 
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: var(--bg);
@@ -67,6 +73,8 @@ form {
     padding: clamp(14px, 3vw, 24px);
     border-radius: 16px;
     border: 1px solid var(--border);
+    width: 100%;
+    min-width: 0;
 }
 
 label {
@@ -92,9 +100,12 @@ textarea {
 }
 
 input[readonly],
-textarea[readonly] {
+textarea[readonly],
+input[disabled],
+textarea[disabled] {
     color: var(--muted);
     background: #12161d;
+    cursor: not-allowed;
 }
 
 textarea {
@@ -168,13 +179,54 @@ button {
 }
 
 button:hover,
-button:focus-visible {
+button:focus-visible,
+.button-link:hover,
+.button-link:focus-visible {
     background-color: var(--button-hover);
     transform: translateY(-1px);
 }
 
 button:active {
     transform: translateY(0);
+}
+
+.button-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 12px 18px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background-color: var(--button);
+    color: var(--text);
+    text-decoration: none;
+    transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.button-link:hover {
+    text-decoration: none;
+}
+
+.upload-actions {
+    display: grid;
+    grid-template-columns: max-content minmax(240px, 1fr) max-content;
+    gap: 12px;
+    align-items: end;
+}
+
+.upload-file-label {
+    margin-bottom: 0;
+}
+
+.upload-status {
+    min-height: 24px;
+    margin: 16px 0 0;
+    color: var(--accent);
+}
+
+.upload-status.error {
+    color: #ff9cac;
 }
 
 table {
@@ -288,6 +340,10 @@ a:hover {
 }
 
 @media (max-width: 760px) {
+    body {
+        padding: 12px;
+    }
+
     header {
         padding-right: 0;
         margin-bottom: 16px;
@@ -305,6 +361,11 @@ a:hover {
 
     main {
         gap: 16px;
+        width: 100%;
+    }
+
+    section {
+        padding: 12px;
     }
 
     #landing-page {
@@ -313,12 +374,50 @@ a:hover {
     }
 
     #landing-page button,
-    .form-buttons button {
+    .form-buttons button,
+    .button-link,
+    .upload-actions button {
         width: 100%;
     }
 
-    .form-buttons {
+    .form-buttons,
+    .upload-actions {
         flex-direction: column;
+    }
+
+    .upload-actions {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+    }
+
+    form {
+        padding: 12px;
+    }
+
+    .form-section {
+        margin-bottom: 12px;
+    }
+
+    .form-section summary {
+        padding: 12px 14px;
+    }
+
+    .form-field-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
+        padding: 12px;
+    }
+
+    label {
+        margin-bottom: 8px;
+    }
+
+    input[type="text"],
+    input[type="file"],
+    input[type="date"],
+    select,
+    textarea {
+        margin-bottom: 12px;
     }
 
     #back-button {
@@ -393,13 +492,23 @@ a:hover {
 
 @media (max-width: 420px) {
     body {
-        padding: 10px;
+        padding: 8px;
     }
 
     section,
     form,
     .form-section {
         border-radius: 12px;
+    }
+
+    section,
+    form,
+    .form-field-grid {
+        padding: 10px;
+    }
+
+    .form-section summary {
+        padding: 11px 12px;
     }
 
     input[type="text"],
