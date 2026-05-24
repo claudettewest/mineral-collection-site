@@ -91,9 +91,69 @@ textarea {
     color: var(--text);
 }
 
+input[readonly],
+textarea[readonly] {
+    color: var(--muted);
+    background: #12161d;
+}
+
 textarea {
     min-height: 120px;
     resize: vertical;
+}
+
+.form-section {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin: 0 0 18px;
+    overflow: hidden;
+}
+
+.form-section summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 14px 16px;
+    color: var(--accent);
+    font-weight: 600;
+    background: #202633;
+}
+
+.form-section summary::-webkit-details-marker {
+    display: none;
+}
+
+.form-section summary::after {
+    content: '+';
+    float: right;
+    color: var(--muted);
+}
+
+.form-section[open] summary {
+    border-bottom: 1px solid var(--border);
+}
+
+.form-section[open] summary::after {
+    content: '-';
+}
+
+.form-field-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0 16px;
+    padding: 16px;
+}
+
+.form-field {
+    min-width: 0;
+}
+
+.form-field:has(textarea),
+.form-field:has(input[type="file"]) {
+    grid-column: 1 / -1;
+}
+
+.form-field textarea {
+    min-height: 96px;
 }
 
 button {
@@ -337,7 +397,8 @@ a:hover {
     }
 
     section,
-    form {
+    form,
+    .form-section {
         border-radius: 12px;
     }
 

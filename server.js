@@ -5,6 +5,32 @@ const path = require('path');
 
 const app = express();
 const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024 * 1024;
+const EXTRA_MINERAL_FIELDS = [
+    'gpsCoordinates',
+    'colour',
+    'streak',
+    'hardness',
+    'specificGravity',
+    'refractiveIndex',
+    'magnetism',
+    'cleavage',
+    'fracture',
+    'luster',
+    'crystalSystem',
+    'transparency',
+    'uvShortwave',
+    'uvLongwave',
+    'phosphorescence',
+    'fluorescenceColour',
+    'chartroyancy',
+    'iridescence',
+    'hcl',
+    'ammonia',
+    'peroxide',
+    'conductivity',
+    'observations',
+    'strunz',
+];
 const dbPath = path.join(__dirname, 'minerals.db');
 const db = new sqlite3.Database(dbPath, (error) => {
     if (error) {
@@ -27,13 +53,39 @@ db.serialize(() => {
             description TEXT,
             photo TEXT,
             photos TEXT,
+            gpsCoordinates TEXT,
+            colour TEXT,
+            streak TEXT,
+            hardness TEXT,
+            specificGravity TEXT,
+            refractiveIndex TEXT,
+            magnetism TEXT,
+            cleavage TEXT,
+            fracture TEXT,
+            luster TEXT,
+            crystalSystem TEXT,
+            transparency TEXT,
+            uvShortwave TEXT,
+            uvLongwave TEXT,
+            phosphorescence TEXT,
+            fluorescenceColour TEXT,
+            chartroyancy TEXT,
+            iridescence TEXT,
+            hcl TEXT,
+            ammonia TEXT,
+            peroxide TEXT,
+            conductivity TEXT,
+            observations TEXT,
+            strunz TEXT,
             createdAt TEXT
         )
     `);
-    db.run('ALTER TABLE minerals ADD COLUMN photos TEXT', (error) => {
-        if (error && !/duplicate column name/i.test(error.message)) {
-            console.error('Error adding photos column:', error);
-        }
+    ['photos', ...EXTRA_MINERAL_FIELDS].forEach((field) => {
+        db.run(`ALTER TABLE minerals ADD COLUMN ${field} TEXT`, (error) => {
+            if (error && !/duplicate column name/i.test(error.message)) {
+                console.error(`Error adding ${field} column:`, error);
+            }
+        });
     });
 });
 
@@ -51,15 +103,12 @@ app.get('/api/minerals', (req, res) => {
 });
 
 app.post('/api/minerals', (req, res) => {
-    const { specimenId, name, type, group, subgroup, date, origin, description, photo } = req.body;
+    const { specimenId, name, type, subgroup, date, origin, description, photo } = req.body;
+    const group = req.body.groupName || req.body.group;
     const photos = normalizePhotos(req.body.photos, photo);
 
-    if (!specimenId || !name || !type || !group || !subgroup || !date || !origin || !description) {
+    if (!hasRequiredBasicFields(req.body)) {
         return res.status(400).json({ error: 'Missing required mineral fields' });
-    }
-
-    if (!photos.length) {
-        return res.status(400).json({ error: 'At least one photo is required' });
     }
 
     const oversizedPhoto = photos.find((item) => item.size > MAX_PHOTO_SIZE_BYTES);
@@ -68,10 +117,12 @@ app.post('/api/minerals', (req, res) => {
     }
 
     const createdAt = new Date().toISOString();
+    const extraValues = getExtraMineralValues(req.body);
     const sql = `
         INSERT INTO minerals (
-            specimenId, name, type, groupName, subgroup, date, origin, description, photo, photos, createdAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            specimenId, name, type, groupName, subgroup, date, origin, description, photo, photos,
+            ${EXTRA_MINERAL_FIELDS.join(', ')}, createdAt
+        ) VALUES (${Array.from({ length: 11 + EXTRA_MINERAL_FIELDS.length }, () => '?').join(', ')})
     `;
 
     db.run(sql, [
@@ -85,6 +136,7 @@ app.post('/api/minerals', (req, res) => {
         description,
         photos[0]?.dataUrl || '',
         JSON.stringify(photos),
+        ...extraValues,
         createdAt,
     ], function (error) {
         if (error) {
@@ -103,15 +155,12 @@ app.post('/api/minerals', (req, res) => {
 });
 
 app.put('/api/minerals/:id', (req, res) => {
-    const { specimenId, name, type, group, subgroup, date, origin, description, photo } = req.body;
+    const { specimenId, name, type, subgroup, date, origin, description, photo } = req.body;
+    const group = req.body.groupName || req.body.group;
     const photos = normalizePhotos(req.body.photos, photo);
 
-    if (!specimenId || !name || !type || !group || !subgroup || !date || !origin || !description) {
+    if (!hasRequiredBasicFields(req.body)) {
         return res.status(400).json({ error: 'Missing required mineral fields' });
-    }
-
-    if (!photos.length) {
-        return res.status(400).json({ error: 'At least one photo is required' });
     }
 
     const oversizedPhoto = photos.find((item) => item.size > MAX_PHOTO_SIZE_BYTES);
@@ -119,6 +168,7 @@ app.put('/api/minerals/:id', (req, res) => {
         return res.status(400).json({ error: `${oversizedPhoto.name || 'Photo'} exceeds the 5 GB limit` });
     }
 
+    const extraValues = getExtraMineralValues(req.body);
     const sql = `
         UPDATE minerals
         SET specimenId = ?,
@@ -130,7 +180,8 @@ app.put('/api/minerals/:id', (req, res) => {
             origin = ?,
             description = ?,
             photo = ?,
-            photos = ?
+            photos = ?,
+            ${EXTRA_MINERAL_FIELDS.map((field) => `${field} = ?`).join(',\n            ')}
         WHERE id = ?
     `;
 
@@ -145,6 +196,7 @@ app.put('/api/minerals/:id', (req, res) => {
         description,
         photos[0]?.dataUrl || '',
         JSON.stringify(photos),
+        ...extraValues,
         req.params.id,
     ], function (error) {
         if (error) {
@@ -194,6 +246,22 @@ function normalizePhotos(photos, fallbackPhoto) {
     }
 
     return fallbackPhoto ? [{ dataUrl: fallbackPhoto, name: '', size: 0, type: '' }] : [];
+}
+
+function getExtraMineralValues(body) {
+    return EXTRA_MINERAL_FIELDS.map((field) => body[field] || '');
+}
+
+function hasRequiredBasicFields(body) {
+    return [
+        'specimenId',
+        'name',
+        'date',
+        'origin',
+        'description',
+        'gpsCoordinates',
+        'observations',
+    ].every((field) => String(body[field] || '').trim());
 }
 
 app.get('*', (req, res) => {

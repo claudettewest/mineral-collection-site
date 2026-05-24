@@ -14,67 +14,100 @@
             'Meteorite',
             'Organic',
         ];
+        this.FIELD_GROUPS = [
+            {
+                title: 'Basic Data',
+                fields: [
+                    { name: 'id', label: 'ID', readonly: true },
+                    { name: 'specimenId', label: 'Specimen Number', required: true },
+                    { name: 'name', label: 'Name', required: true },
+                    { name: 'date', label: 'Date', type: 'date', required: true },
+                    { name: 'origin', label: 'Origin', required: true },
+                    { name: 'description', label: 'Description', multiline: true, required: true },
+                    { name: 'gpsCoordinates', label: 'GPS Coordinates', required: true },
+                    { name: 'observations', label: 'Observations', multiline: true, required: true },
+                    { name: 'createdAt', label: 'Created At', readonly: true },
+                ],
+            },
+            {
+                title: 'Photos',
+                fields: [
+                    { name: 'photos', label: 'Photos', type: 'file', multiple: true },
+                ],
+            },
+            {
+                title: 'Classification',
+                fields: [
+                    { name: 'type', label: 'Type', type: 'select' },
+                    { name: 'groupName', label: 'Group Name' },
+                    { name: 'subgroup', label: 'Subgroup' },
+                    { name: 'strunz', label: 'Strunz' },
+                ],
+            },
+            {
+                title: 'Observable',
+                fields: [
+                    { name: 'colour', label: 'Colour' },
+                    { name: 'streak', label: 'Streak' },
+                    { name: 'hardness', label: 'Hardness' },
+                    { name: 'magnetism', label: 'Magnetism' },
+                    { name: 'cleavage', label: 'Cleavage' },
+                    { name: 'fracture', label: 'Fracture' },
+                    { name: 'luster', label: 'Luster' },
+                    { name: 'transparency', label: 'Transparency' },
+                    { name: 'uvShortwave', label: 'UV Shortwave' },
+                    { name: 'uvLongwave', label: 'UV Longwave' },
+                    { name: 'phosphorescence', label: 'Phosphorescence' },
+                    { name: 'fluorescenceColour', label: 'Fluorescence Colour' },
+                    { name: 'chartroyancy', label: 'Chartroyancy' },
+                    { name: 'iridescence', label: 'Iridescence' },
+                ],
+            },
+            {
+                title: 'Tests',
+                fields: [
+                    { name: 'specificGravity', label: 'Specific Gravity' },
+                    { name: 'refractiveIndex', label: 'Refractive Index' },
+                    { name: 'crystalSystem', label: 'Crystal System' },
+                    { name: 'hcl', label: 'HCL' },
+                    { name: 'ammonia', label: 'Ammonia' },
+                    { name: 'peroxide', label: 'Peroxide' },
+                    { name: 'conductivity', label: 'Conductivity' },
+                ],
+            },
+        ];
+        this.EXTRA_FIELD_NAMES = [
+            'gpsCoordinates',
+            'colour',
+            'streak',
+            'hardness',
+            'specificGravity',
+            'refractiveIndex',
+            'magnetism',
+            'cleavage',
+            'fracture',
+            'luster',
+            'crystalSystem',
+            'transparency',
+            'uvShortwave',
+            'uvLongwave',
+            'phosphorescence',
+            'fluorescenceColour',
+            'chartroyancy',
+            'iridescence',
+            'hcl',
+            'ammonia',
+            'peroxide',
+            'conductivity',
+            'observations',
+            'strunz',
+        ];
     }
 
     render() {
         this.form = document.createElement('form');
         this.form.innerHTML = `
-            <div>
-                <label>
-                    Specimen ID:
-                    <input type="text" name="specimenId" required />
-                </label>
-            </div>
-            <div>
-                <label>
-                    Name:
-                    <input type="text" name="name" required />
-                </label>
-            </div>
-            <div>
-                <label>
-                    Type:
-                    <select name="type" required>
-                        <option value="">Select type</option>
-                    </select>
-                </label>
-            </div>
-            <div>
-                <label>
-                    Group:
-                    <input type="text" name="group" required />
-                </label>
-            </div>
-            <div>
-                <label>
-                    Subgroup:
-                    <input type="text" name="subgroup" required />
-                </label>
-            </div>
-            <div>
-                <label>
-                    Date:
-                    <input type="date" name="date" required />
-                </label>
-            </div>
-            <div>
-                <label>
-                    Origin:
-                    <input type="text" name="origin" required />
-                </label>
-            </div>
-            <div>
-                <label>
-                    Description:
-                    <textarea name="description" required></textarea>
-                </label>
-            </div>
-            <div>
-                <label>
-                    Photos:
-                    <input type="file" name="photos" accept="image/*" multiple required />
-                </label>
-            </div>
+            ${this.FIELD_GROUPS.map((group) => this._renderFieldGroup(group)).join('')}
             <div class="form-buttons">
                 <button type="submit" data-role="submit">Save</button>
                 <button type="button" data-role="cancel-edit" style="display:none;">Cancel</button>
@@ -106,9 +139,6 @@
     _submitForm() {
         const photoInput = this.form.querySelector('input[name="photos"]');
         const photoFiles = Array.from(photoInput.files);
-        if (!photoFiles.length && !this.editingMineral) {
-            return;
-        }
 
         if (!this._validatePhotoSizes(photoInput)) {
             return;
@@ -126,10 +156,11 @@
                     specimenId: this.form.querySelector('input[name="specimenId"]').value,
                     name: this.form.querySelector('input[name="name"]').value,
                     type: this.form.querySelector('select[name="type"]').value,
-                    group: this.form.querySelector('input[name="group"]').value,
+                    groupName: this.form.querySelector('input[name="groupName"]').value,
                     subgroup: this.form.querySelector('input[name="subgroup"]').value,
                     date: this.form.querySelector('input[name="date"]').value,
                     origin: this.form.querySelector('input[name="origin"]').value,
+                    ...this._getExtraFieldValues(),
                     description: this.form.querySelector('textarea[name="description"]').value,
                     photos,
                     photo: photos[0]?.dataUrl || '',
@@ -177,15 +208,21 @@
 
     edit(mineral) {
         this.editingMineral = mineral;
+        this.form.querySelector('input[name="id"]').value = mineral.id || '';
         this.form.querySelector('input[name="specimenId"]').value = mineral.specimenId || '';
         this.form.querySelector('input[name="name"]').value = mineral.name || '';
         this.form.querySelector('select[name="type"]').value = mineral.type || '';
-        this.form.querySelector('input[name="group"]').value = mineral.group || mineral.groupName || '';
+        this.form.querySelector('input[name="groupName"]').value = mineral.group || mineral.groupName || '';
         this.form.querySelector('input[name="subgroup"]').value = mineral.subgroup || '';
         this.form.querySelector('input[name="date"]').value = mineral.date || '';
         this.form.querySelector('input[name="origin"]').value = mineral.origin || '';
+        this.EXTRA_FIELD_NAMES.forEach((fieldName) => {
+            this.form.querySelector(`[name="${fieldName}"]`).value = mineral[fieldName] || '';
+        });
         this.form.querySelector('textarea[name="description"]').value = mineral.description || '';
+        this.form.querySelector('input[name="createdAt"]').value = mineral.createdAt || '';
         this.form.querySelector('input[name="photos"]').required = false;
+        this._resetSectionState();
         this.form.querySelector('[data-role="submit"]').textContent = 'Update';
         this.form.querySelector('[data-role="cancel-edit"]').style.display = '';
     }
@@ -194,7 +231,10 @@
         if (this.form) {
             this.form.reset();
             this.editingMineral = null;
-            this.form.querySelector('input[name="photos"]').required = true;
+            this.form.querySelector('input[name="id"]').value = '';
+            this.form.querySelector('input[name="createdAt"]').value = '';
+            this.form.querySelector('input[name="photos"]').required = false;
+            this._resetSectionState();
             this.form.querySelector('[data-role="submit"]').textContent = 'Save';
             this.form.querySelector('[data-role="cancel-edit"]').style.display = 'none';
         }
@@ -217,5 +257,59 @@
         }
 
         return mineral.photo ? [{ dataUrl: mineral.photo, name: mineral.name }] : [];
+    }
+
+    _renderFieldGroup(group) {
+        const isBasicData = group.title === 'Basic Data';
+        return `
+            <details class="form-section"${isBasicData ? ' open' : ''}>
+                <summary>${group.title}</summary>
+                <div class="form-field-grid">
+                    ${group.fields.map((field) => this._renderField(field)).join('')}
+                </div>
+            </details>
+        `;
+    }
+
+    _renderField(field) {
+        const required = field.required ? ' required' : '';
+        const readonly = field.readonly ? ' readonly' : '';
+        const multiple = field.multiple ? ' multiple' : '';
+        const type = field.type || 'text';
+        let control = `<input type="${type}" name="${field.name}"${required}${readonly}${multiple} />`;
+
+        if (type === 'file') {
+            control = `<input type="file" name="${field.name}" accept="image/*"${required}${multiple} />`;
+        } else if (type === 'select') {
+            control = `
+                <select name="${field.name}"${required}>
+                    <option value="">Select type</option>
+                </select>
+            `;
+        } else if (field.multiline) {
+            control = `<textarea name="${field.name}"${required}${readonly}></textarea>`;
+        }
+
+        return `
+            <div class="form-field">
+                <label>
+                    ${field.label}:
+                    ${control}
+                </label>
+            </div>
+        `;
+    }
+
+    _getExtraFieldValues() {
+        return this.EXTRA_FIELD_NAMES.reduce((values, fieldName) => {
+            values[fieldName] = this.form.querySelector(`[name="${fieldName}"]`).value;
+            return values;
+        }, {});
+    }
+
+    _resetSectionState() {
+        this.form.querySelectorAll('.form-section').forEach((section) => {
+            section.open = section.querySelector('summary').textContent === 'Basic Data';
+        });
     }
 }
