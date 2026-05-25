@@ -1,6 +1,7 @@
 class UploadForm {
     constructor() {
         this.onUploadCompleteCallback = null;
+        this.onDeleteAllCallback = null;
     }
 
     render() {
@@ -15,6 +16,7 @@ class UploadForm {
                     <input type="file" name="csv" accept=".csv,text/csv" />
                 </label>
                 <button type="button" data-role="upload">Upload CSV</button>
+                <button class="danger-button" type="button" data-role="delete-all">Delete All Data</button>
             </div>
             <p class="upload-status" data-role="status" aria-live="polite"></p>
         `;
@@ -24,12 +26,19 @@ class UploadForm {
         this.container.querySelector('[data-role="upload"]').addEventListener('click', () => {
             this._uploadCsv();
         });
+        this.container.querySelector('[data-role="delete-all"]').addEventListener('click', () => {
+            this._deleteAllData();
+        });
 
         return this.container;
     }
 
     onUploadComplete(callback) {
         this.onUploadCompleteCallback = callback;
+    }
+
+    onDeleteAll(callback) {
+        this.onDeleteAllCallback = callback;
     }
 
     clear() {
@@ -75,6 +84,41 @@ class UploadForm {
         } catch (error) {
             console.error('Error uploading CSV:', error);
             this._setStatus('CSV upload failed.', true);
+        }
+    }
+
+    async _deleteAllData() {
+        const firstConfirm = confirm('This will permanently delete every record in the database. Continue?');
+        if (!firstConfirm) {
+            return;
+        }
+
+        const secondConfirm = confirm('All mineral records will be deleted and the next ID will reset to 0001. This cannot be undone. Delete all data?');
+        if (!secondConfirm) {
+            return;
+        }
+
+        this._setStatus('Deleting all records...');
+
+        try {
+            const response = await fetch('/api/minerals', {
+                method: 'DELETE',
+            });
+            const result = await response.json();
+
+            if (!response.ok) {
+                this._setStatus(result.error || 'Delete all failed.', true);
+                return;
+            }
+
+            this.fileInput.value = '';
+            this._setStatus(`All records deleted. Next ID is ${result.formattedId || '0001'}.`);
+            if (this.onDeleteAllCallback) {
+                this.onDeleteAllCallback();
+            }
+        } catch (error) {
+            console.error('Error deleting all data:', error);
+            this._setStatus('Delete all failed.', true);
         }
     }
 

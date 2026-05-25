@@ -14,6 +14,13 @@
             'Meteorite',
             'Organic',
         ];
+        this.GROUP_OPTIONS_BY_TYPE = {
+            Element: ['Metals', 'Semimetals', 'Nonmetals'],
+            Mineral: ['Sulfides', 'Halides', 'Oxides', 'Carbonates', 'Nitrates', 'Borates', 'Sulfates', 'Phosphates', 'Silicates'],
+            Igneous: ['Felsic', 'Intermediate', 'Mafic', 'Ultramafic'],
+            Sedimentary: ['Clastic', 'Chemical', 'Organic'],
+            Metamorphic: ['Pelitic', 'Quartzpfeldspathic', 'Calcareous', 'Ultramafic', 'Amphibolitic', 'Serpentinite'],
+        };
         this.FIELD_GROUPS = [
             {
                 title: 'Basic Data',
@@ -121,6 +128,9 @@
             item.textContent = option;
             typeSelect.appendChild(item);
         });
+        typeSelect.addEventListener('change', () => {
+            this._updateGroupControl();
+        });
 
         this.form.addEventListener('submit', (event) => {
             event.preventDefault();
@@ -133,6 +143,7 @@
             this.clear();
         });
         this._setGeneratedFieldsForNewRecord();
+        this._updateGroupControl();
 
         return this.form;
     }
@@ -157,7 +168,7 @@
                     specimenId: this.form.querySelector('input[name="specimenId"]').value,
                     name: this.form.querySelector('input[name="name"]').value,
                     type: this.form.querySelector('select[name="type"]').value,
-                    groupName: this.form.querySelector('input[name="groupName"]').value,
+                    groupName: this._getGroupValue(),
                     subgroup: this.form.querySelector('input[name="subgroup"]').value,
                     date: this.form.querySelector('input[name="date"]').value,
                     origin: this.form.querySelector('input[name="origin"]').value,
@@ -213,7 +224,7 @@
         this.form.querySelector('input[name="specimenId"]').value = mineral.specimenId || '';
         this.form.querySelector('input[name="name"]').value = mineral.name || '';
         this.form.querySelector('select[name="type"]').value = mineral.type || '';
-        this.form.querySelector('input[name="groupName"]').value = mineral.group || mineral.groupName || '';
+        this._updateGroupControl(mineral.group || mineral.groupName || '');
         this.form.querySelector('input[name="subgroup"]').value = mineral.subgroup || '';
         this.form.querySelector('input[name="date"]').value = mineral.date || '';
         this.form.querySelector('input[name="origin"]').value = mineral.origin || '';
@@ -233,6 +244,7 @@
             this.form.reset();
             this.editingMineral = null;
             this._setGeneratedFieldsForNewRecord();
+            this._updateGroupControl();
             this.form.querySelector('input[name="photos"]').required = false;
             this._resetSectionState();
             this.form.querySelector('[data-role="submit"]').textContent = 'Save';
@@ -281,6 +293,13 @@
 
         if (type === 'file') {
             control = `<input type="file" name="${field.name}" accept="image/*"${required}${multiple} />`;
+        } else if (field.name === 'groupName') {
+            control = `
+                <select name="groupName" data-role="group-select" hidden>
+                    <option value="">Select group</option>
+                </select>
+                <input type="text" name="groupNameText" data-role="group-input" />
+            `;
         } else if (type === 'select') {
             control = `
                 <select name="${field.name}"${required}>
@@ -342,5 +361,42 @@
 
     _formatId(id) {
         return String(id || '').padStart(4, '0');
+    }
+
+    _updateGroupControl(value = this._getGroupValue()) {
+        const type = this.form.querySelector('select[name="type"]').value;
+        const options = this.GROUP_OPTIONS_BY_TYPE[type] || [];
+        const groupSelect = this.form.querySelector('[data-role="group-select"]');
+        const groupInput = this.form.querySelector('[data-role="group-input"]');
+
+        if (options.length) {
+            groupSelect.innerHTML = '<option value="">Select group</option>';
+            options.forEach((option) => {
+                const item = document.createElement('option');
+                item.value = option;
+                item.textContent = option;
+                groupSelect.appendChild(item);
+            });
+            groupSelect.hidden = false;
+            groupSelect.disabled = false;
+            groupInput.hidden = true;
+            groupInput.disabled = true;
+            groupSelect.value = options.includes(value) ? value : '';
+            groupInput.value = value;
+            return;
+        }
+
+        groupSelect.hidden = true;
+        groupSelect.disabled = true;
+        groupInput.hidden = false;
+        groupInput.disabled = false;
+        groupInput.value = value;
+    }
+
+    _getGroupValue() {
+        const groupSelect = this.form.querySelector('[data-role="group-select"]');
+        const groupInput = this.form.querySelector('[data-role="group-input"]');
+
+        return groupSelect && !groupSelect.hidden ? groupSelect.value : groupInput.value;
     }
 }

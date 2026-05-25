@@ -104,6 +104,11 @@
         refreshMinerals();
     });
 
+    uploadForm.onDeleteAll(() => {
+        mineralForm.clear();
+        refreshMinerals();
+    });
+
     mineralList.onEdit((mineral) => {
         mineralForm.edit(mineral);
         showForm();

@@ -1,0 +1,211 @@
+Mineral Database User Guide
+===========================
+
+Overview
+--------
+This application stores and manages mineral collection records in a local SQLite database named minerals.db.
+
+Each record represents one specimen. Records can be created manually through the form, viewed in the collection list, edited, deleted, or imported in bulk from a CSV file.
+
+
+Database
+--------
+The database table is called minerals.
+
+The database automatically creates:
+- id: Sequential internal record number.
+- createdAt: Date and time when the record was created.
+
+In the form, id is displayed as a 4 digit number, for example 0001, 0002, 0003.
+
+Do not include id or createdAt when uploading CSV data. They are generated automatically.
+
+
+Main UI
+-------
+The landing screen has three main actions:
+
+Add Specimen
+Opens the mineral entry form for adding one new record.
+
+View Entries
+Shows the saved mineral records in a table. From this table, records can be edited or deleted.
+
+Upload CSV
+Opens the CSV upload screen for importing existing data.
+
+The Back button returns to the landing screen.
+
+
+Mineral Form
+------------
+The mineral form is grouped into expandable sections.
+
+Only Basic Data is open when the form launches. The other sections can be expanded when needed.
+
+Basic Data
+This section contains the required fields:
+- ID: Generated automatically and disabled.
+- Specimen Number: Your specimen number or catalogue reference.
+- Name: Mineral or specimen name.
+- Date: Collection, acquisition, or record date.
+- Origin: Location, mine, dealer, or source.
+- Description: General description of the specimen.
+- GPS Coordinates: Latitude and longitude, if known.
+- Observations: General notes or observations.
+- Created At: Generated automatically and disabled.
+
+Photos
+This section is optional.
+- Photos: Upload one or more image files.
+
+The database stores:
+- photo: The first photo.
+- photos: The full photo list.
+
+Classification
+This section is optional.
+- Type: Dropdown list describing the specimen category.
+- Group Name: Mineral group.
+- Subgroup: Mineral subgroup.
+- Strunz: Strunz classification code.
+
+Observable
+This section is optional.
+- Colour: Visible colour.
+- Streak: Streak colour.
+- Hardness: Mohs hardness or hardness notes.
+- Magnetism: Magnetic response.
+- Cleavage: Cleavage description.
+- Fracture: Fracture description.
+- Luster: Surface luster.
+- Transparency: Transparent, translucent, opaque, or notes.
+- UV Shortwave: Reaction under shortwave UV.
+- UV Longwave: Reaction under longwave UV.
+- Phosphorescence: Afterglow behaviour.
+- Fluorescence Colour: Fluorescence colour.
+- Chartroyancy: Chatoyancy or cat's-eye effect notes.
+- Iridescence: Iridescent effect notes.
+
+Tests
+This section is optional.
+- Specific Gravity: Specific gravity value or notes.
+- Refractive Index: Refractive index value or notes.
+- Crystal System: Crystal system.
+- HCL: Hydrochloric acid reaction.
+- Ammonia: Ammonia reaction.
+- Peroxide: Peroxide reaction.
+- Conductivity: Conductivity test result.
+
+
+Dropdowns
+---------
+The Type field is a dropdown.
+
+Available Type values:
+- Element
+- Mineral
+- Fossil
+- Manmade
+- Igneous
+- Sedimentary
+- Metamorphic
+- Meteorite
+- Organic
+
+The Type field is optional. Leave it blank if none of the listed values applies.
+
+
+CSV Upload
+----------
+Use Upload CSV to import existing data in bulk.
+
+Step 1: Download CSV Template
+Click Download CSV Template to get a CSV file containing the supported field names.
+
+Step 2: Fill in the CSV
+Add one specimen per row.
+
+Do not add id or createdAt columns. The application adds those automatically.
+
+Required CSV fields are the Basic Data fields:
+- specimenId
+- name
+- date
+- origin
+- description
+- gpsCoordinates
+- observations
+
+All other CSV fields are optional.
+
+Step 3: Upload CSV
+Choose the completed CSV file and click Upload CSV.
+
+Before importing, the application checks whether the CSV is uploadable:
+- The required headers must be present.
+- Unknown headers are rejected.
+- Required Basic Data fields must be filled for each row.
+- Photo size metadata is checked when supplied.
+
+If the CSV is valid, all rows are added to the database and the screen confirms how many records were added.
+
+If the CSV is not valid, no records are added.
+
+
+CSV Field Names
+---------------
+Use these field names in CSV files:
+
+specimenId
+name
+date
+origin
+description
+gpsCoordinates
+observations
+photo
+photos
+type
+groupName
+subgroup
+strunz
+colour
+streak
+hardness
+magnetism
+cleavage
+fracture
+luster
+transparency
+uvShortwave
+uvLongwave
+phosphorescence
+fluorescenceColour
+chartroyancy
+iridescence
+specificGravity
+refractiveIndex
+crystalSystem
+hcl
+ammonia
+peroxide
+conductivity
+
+
+Viewing and Editing Records
+---------------------------
+The View Entries screen displays saved records.
+
+Use the edit button to open a record in the form. The ID and Created At fields remain disabled because they are generated fields.
+
+Use the delete button to remove a record.
+
+
+Notes
+-----
+The database is local to this project.
+
+Images are stored in the database as data URLs. Large image files can make the database much larger.
+
+CSV import is best for text-based specimen data. Photos can still be added later by editing individual records.

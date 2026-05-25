@@ -190,6 +190,15 @@ button:active {
     transform: translateY(0);
 }
 
+.danger-button {
+    background-color: #8c2f3d;
+}
+
+.danger-button:hover,
+.danger-button:focus-visible {
+    background-color: #a33b4c;
+}
+
 .button-link {
     display: inline-flex;
     align-items: center;
@@ -210,7 +219,7 @@ button:active {
 
 .upload-actions {
     display: grid;
-    grid-template-columns: max-content minmax(240px, 1fr) max-content;
+    grid-template-columns: max-content minmax(240px, 1fr) max-content max-content;
     gap: 12px;
     align-items: end;
 }
@@ -243,6 +252,34 @@ thead th {
     border-bottom: 1px solid var(--border);
     color: var(--accent);
     font-weight: 600;
+}
+
+thead th:has(.sort-header) {
+    padding: 0;
+}
+
+.sort-header {
+    width: 100%;
+    min-height: auto;
+    padding: 14px 16px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--accent);
+    font: inherit;
+    text-align: left;
+    transform: none;
+}
+
+.sort-header:hover,
+.sort-header:focus-visible {
+    background: #202633;
+    transform: none;
+}
+
+.sort-indicator {
+    float: right;
+    color: var(--muted);
 }
 
 tbody tr {
@@ -478,6 +515,10 @@ a:hover {
         content: attr(data-label);
         color: var(--muted);
         font-weight: 600;
+    }
+
+    .sort-header {
+        padding: 0;
     }
 
     .mineral-thumbnail-link {

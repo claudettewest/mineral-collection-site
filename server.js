@@ -203,6 +203,30 @@ app.post('/api/minerals/upload-csv', upload.single('csv'), (req, res) => {
     });
 });
 
+app.delete('/api/minerals', (req, res) => {
+    db.serialize(() => {
+        db.run('DELETE FROM minerals', (deleteError) => {
+            if (deleteError) {
+                console.error('Error deleting all minerals:', deleteError);
+                return res.status(500).json({ error: 'Database error' });
+            }
+
+            db.run("DELETE FROM sqlite_sequence WHERE name = 'minerals'", (sequenceError) => {
+                if (sequenceError) {
+                    console.error('Error resetting mineral ID sequence:', sequenceError);
+                    return res.status(500).json({ error: 'Database error' });
+                }
+
+                res.json({
+                    deleted: true,
+                    nextId: 1,
+                    formattedId: formatDisplayId(1),
+                });
+            });
+        });
+    });
+});
+
 app.post('/api/minerals', (req, res) => {
     const { specimenId, name, type, subgroup, date, origin, description, photo } = req.body;
     const group = req.body.groupName || req.body.group;
