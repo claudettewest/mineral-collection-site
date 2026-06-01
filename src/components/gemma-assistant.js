@@ -7,7 +7,7 @@ class GemmaAssistant {
         this.container = document.createElement('div');
         this.container.className = 'gemma-assistant';
         this.container.innerHTML = `
-            <h2>Gemma Assistant</h2>
+            <h2>Ask a question</h2>
             <div class="gemma-chat" data-role="chat" aria-live="polite"></div>
             <form class="gemma-form">
                 <label>
@@ -15,7 +15,7 @@ class GemmaAssistant {
                     <textarea name="prompt" required placeholder="Summarize saved specimens, compare catalog records, or find missing details in the catalog."></textarea>
                 </label>
                 <div class="form-buttons">
-                    <button type="submit" data-role="ask">Ask Gemma</button>
+                    <button type="submit" data-role="ask">Ask a question</button>
                     <button type="button" data-role="clear">Clear</button>
                 </div>
             </form>
@@ -53,7 +53,7 @@ class GemmaAssistant {
         }
 
         this.messages.push({ role: 'user', text: prompt });
-        this.messages.push({ role: 'status', text: 'Gemma is thinking...' });
+        this.messages.push({ role: 'status', text: 'Thinking...' });
         this._setLoading(true);
         this._renderMessages();
 
@@ -69,12 +69,11 @@ class GemmaAssistant {
             .then(({ ok, body }) => {
                 this._removeStatusMessage();
                 if (!ok) {
-                    throw new Error(body.error || 'Gemma request failed');
+                    throw new Error(body.error || 'Question failed');
                 }
                 this.messages.push({
                     role: 'assistant',
-                    text: body.answer || 'Gemma returned an empty response.',
-                    model: body.model,
+                    text: body.answer || 'No answer was returned.',
                 });
                 this.promptInput.value = '';
             })
@@ -103,14 +102,14 @@ class GemmaAssistant {
         }
 
         if (!this.messages.length) {
-            this.chat.innerHTML = '<p class="gemma-empty">Ask Gemma to answer from saved catalog records only.</p>';
+            this.chat.innerHTML = '<p class="gemma-empty">Ask a question about saved catalog records.</p>';
             return;
         }
 
         this.chat.innerHTML = this.messages.map((message) => `
             <article class="gemma-message ${message.role}">
                 <strong>${this._labelForRole(message)}</strong>
-                <p>${this._escapeHtml(message.text).replace(/\n/g, '<br>')}</p>
+                ${this._formatMessageText(message.text)}
             </article>
         `).join('');
         this.chat.scrollTop = this.chat.scrollHeight;
@@ -121,12 +120,92 @@ class GemmaAssistant {
             return 'You';
         }
         if (message.role === 'assistant') {
-            return message.model ? `Gemma (${this._escapeHtml(message.model)})` : 'Gemma';
+            return 'Answer';
         }
         if (message.role === 'error') {
             return 'Error';
         }
         return 'Status';
+    }
+
+    _formatMessageText(text) {
+        const table = this._parseMarkdownTable(text);
+        if (table) {
+            return this._renderTable(table);
+        }
+
+        return `<p>${this._escapeHtml(text).replace(/\n/g, '<br>')}</p>`;
+    }
+
+    _parseMarkdownTable(text) {
+        const lines = String(text || '').trim().split(/\r?\n/).filter(Boolean);
+        const tableStart = lines.findIndex((line, index) => (
+            line.includes('|')
+            && lines[index + 1]
+            && /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(lines[index + 1])
+        ));
+
+        if (tableStart === -1) {
+            return null;
+        }
+
+        const title = lines.slice(0, tableStart).join('\n');
+        const headers = this._splitTableRow(lines[tableStart]);
+        const rowLines = [];
+        const footerLines = [];
+        lines.slice(tableStart + 2).forEach((line) => {
+            if (line.includes('|') && !footerLines.length) {
+                rowLines.push(line);
+            } else {
+                footerLines.push(line);
+            }
+        });
+        const rows = rowLines
+            .map((line) => this._splitTableRow(line))
+            .filter((row) => row.length === headers.length);
+
+        if (!headers.length || !rows.length) {
+            return null;
+        }
+
+        return { title, footer: footerLines.join('\n'), headers, rows };
+    }
+
+    _splitTableRow(line) {
+        return line
+            .trim()
+            .replace(/^\|/, '')
+            .replace(/\|$/, '')
+            .split('|')
+            .map((cell) => cell.trim());
+    }
+
+    _renderTable(table) {
+        const title = table.title
+            ? `<p>${this._escapeHtml(table.title).replace(/\n/g, '<br>')}</p>`
+            : '';
+        const footer = table.footer
+            ? `<p>${this._escapeHtml(table.footer).replace(/\n/g, '<br>')}</p>`
+            : '';
+        const headerHtml = table.headers
+            .map((header) => `<th>${this._escapeHtml(header)}</th>`)
+            .join('');
+        const bodyHtml = table.rows.map((row) => `
+            <tr>
+                ${row.map((cell, index) => `<td data-label="${this._escapeHtml(table.headers[index])}">${this._escapeHtml(cell)}</td>`).join('')}
+            </tr>
+        `).join('');
+
+        return `
+            ${title}
+            <div class="answer-table-wrap">
+                <table class="answer-table">
+                    <thead><tr>${headerHtml}</tr></thead>
+                    <tbody>${bodyHtml}</tbody>
+                </table>
+            </div>
+            ${footer}
+        `;
     }
 
     _escapeHtml(value) {

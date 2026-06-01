@@ -260,12 +260,16 @@ button:active {
 }
 
 .gemma-message {
-    max-width: min(760px, 100%);
+    max-width: min(900px, 100%);
     padding: 12px 14px;
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--panel-strong);
     overflow-wrap: anywhere;
+}
+
+.gemma-message.assistant {
+    justify-self: stretch;
 }
 
 .gemma-message.user {
@@ -292,6 +296,21 @@ button:active {
 .gemma-message p {
     margin: 0;
     line-height: 1.5;
+}
+
+.answer-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.answer-table {
+    margin-top: 8px;
+    font-size: 0.95rem;
+}
+
+.answer-table th,
+.answer-table td {
+    padding: 10px 12px;
 }
 
 .gemma-form textarea {

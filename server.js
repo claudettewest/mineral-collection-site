@@ -84,31 +84,31 @@ const MINERAL_SEARCH_FIELDS = [
     'strunz',
 ];
 const FIELD_ALIASES = [
-    { field: 'specimenId', label: 'specimen ID', terms: ['specimen id', 'specimen', 'catalog number'] },
-    { field: 'name', label: 'name', terms: ['name', 'mineral name'] },
-    { field: 'type', label: 'type', terms: ['type'] },
-    { field: 'groupName', label: 'group', terms: ['group'] },
-    { field: 'subgroup', label: 'subgroup', terms: ['subgroup', 'sub group'] },
-    { field: 'date', label: 'date', terms: ['date', 'collected date', 'collection date'] },
-    { field: 'origin', label: 'origin', terms: ['origin', 'from', 'locality', 'location'] },
-    { field: 'description', label: 'description', terms: ['description'] },
-    { field: 'gpsCoordinates', label: 'GPS coordinates', terms: ['gps', 'coordinates', 'gps coordinates'] },
-    { field: 'observations', label: 'observations', terms: ['observation', 'observations', 'notes'] },
-    { field: 'colour', label: 'colour', terms: ['colour', 'color'] },
-    { field: 'streak', label: 'streak', terms: ['streak'] },
-    { field: 'hardness', label: 'hardness', terms: ['hardness', 'mohs'] },
-    { field: 'specificGravity', label: 'specific gravity', terms: ['specific gravity', 'gravity', 'sg'] },
-    { field: 'refractiveIndex', label: 'refractive index', terms: ['refractive index', 'ri'] },
+    { field: 'specimenId', label: 'specimen ID', terms: ['specimen id', 'specimen ids', 'catalog number', 'catalog numbers'] },
+    { field: 'name', label: 'name', terms: ['name', 'names', 'mineral name', 'mineral names'] },
+    { field: 'type', label: 'type', terms: ['type', 'types'] },
+    { field: 'groupName', label: 'group', terms: ['group', 'groups', 'group name', 'group names'] },
+    { field: 'subgroup', label: 'subgroup', terms: ['subgroup', 'subgroups', 'sub group', 'sub groups'] },
+    { field: 'date', label: 'date', terms: ['date', 'dates', 'collected date', 'collected dates', 'collection date', 'collection dates'] },
+    { field: 'origin', label: 'origin', terms: ['origin', 'origins', 'locality', 'localities', 'location', 'locations'] },
+    { field: 'description', label: 'description', terms: ['description', 'descriptions'] },
+    { field: 'gpsCoordinates', label: 'GPS coordinates', terms: ['gps', 'coordinate', 'coordinates', 'gps coordinate', 'gps coordinates'] },
+    { field: 'observations', label: 'observations', terms: ['observation', 'observations', 'note', 'notes'] },
+    { field: 'colour', label: 'colour', terms: ['colour', 'colours', 'color', 'colors'] },
+    { field: 'streak', label: 'streak', terms: ['streak', 'streaks'] },
+    { field: 'hardness', label: 'hardness', terms: ['hardness', 'hardnesses', 'mohs'] },
+    { field: 'specificGravity', label: 'specific gravity', terms: ['specific gravity', 'specific gravities', 'gravity', 'sg'] },
+    { field: 'refractiveIndex', label: 'refractive index', terms: ['refractive index', 'refractive indexes', 'refractive indices', 'ri'] },
     { field: 'magnetism', label: 'magnetism', terms: ['magnetism', 'magnetic'] },
-    { field: 'cleavage', label: 'cleavage', terms: ['cleavage'] },
-    { field: 'fracture', label: 'fracture', terms: ['fracture'] },
-    { field: 'luster', label: 'luster', terms: ['luster', 'lustre'] },
-    { field: 'crystalSystem', label: 'crystal system', terms: ['crystal system'] },
+    { field: 'cleavage', label: 'cleavage', terms: ['cleavage', 'cleavages'] },
+    { field: 'fracture', label: 'fracture', terms: ['fracture', 'fractures'] },
+    { field: 'luster', label: 'luster', terms: ['luster', 'lusters', 'lustre', 'lustres'] },
+    { field: 'crystalSystem', label: 'crystal system', terms: ['crystal system', 'crystal systems'] },
     { field: 'transparency', label: 'transparency', terms: ['transparency', 'transparent'] },
     { field: 'uvShortwave', label: 'shortwave UV', terms: ['shortwave uv', 'uv shortwave'] },
     { field: 'uvLongwave', label: 'longwave UV', terms: ['longwave uv', 'uv longwave'] },
     { field: 'phosphorescence', label: 'phosphorescence', terms: ['phosphorescence'] },
-    { field: 'fluorescenceColour', label: 'fluorescence colour', terms: ['fluorescence colour', 'fluorescence color'] },
+    { field: 'fluorescenceColour', label: 'fluorescence colour', terms: ['fluorescence colour', 'fluorescence colours', 'fluorescence color', 'fluorescence colors'] },
     { field: 'chartroyancy', label: 'chartroyancy', terms: ['chartroyancy', 'chatoyancy'] },
     { field: 'iridescence', label: 'iridescence', terms: ['iridescence'] },
     { field: 'hcl', label: 'HCL reaction', terms: ['hcl', 'acid'] },
@@ -121,9 +121,11 @@ const QUERY_STOPWORDS = new Set([
     'about',
     'again',
     'also',
+    'all',
     'answer',
     'are',
     'based',
+    'blank',
     'can',
     'catalog',
     'catalogue',
@@ -134,8 +136,12 @@ const QUERY_STOPWORDS = new Set([
     'database',
     'detail',
     'details',
+    'describe',
+    'described',
+    'describes',
     'does',
     'each',
+    'empty',
     'find',
     'for',
     'from',
@@ -148,6 +154,8 @@ const QUERY_STOPWORDS = new Set([
     'mineral',
     'minerals',
     'missing',
+    'no',
+    'not',
     'note',
     'notes',
     'of',
@@ -158,6 +166,8 @@ const QUERY_STOPWORDS = new Set([
     'saved',
     'say',
     'show',
+    'specimin',
+    'specimins',
     'specimen',
     'specimens',
     'summarize',
@@ -167,8 +177,13 @@ const QUERY_STOPWORDS = new Set([
     'the',
     'their',
     'this',
+    'unknown',
+    'unset',
+    'varieties',
+    'variety',
     'what',
     'which',
+    'without',
     'with',
     'you',
 ]);
@@ -338,6 +353,22 @@ app.post('/api/gemma', (req, res) => {
         return res.status(400).json({ error: 'Prompt is required' });
     }
 
+    const summaryQuery = getSummaryQuery(prompt);
+    if (summaryQuery) {
+        db.all(summaryQuery.sql, summaryQuery.params, (error, rows) => {
+            if (error) {
+                console.error('Error answering summary question:', error);
+                return res.status(500).json({ error: 'Database error' });
+            }
+
+            return res.json({
+                answer: formatSummaryAnswer(rows, summaryQuery),
+                model: 'SQLite',
+            });
+        });
+        return;
+    }
+
     const countQuery = getCountQuery(prompt);
     if (countQuery) {
         db.get(countQuery.sql, countQuery.params, (error, row) => {
@@ -354,6 +385,22 @@ app.post('/api/gemma', (req, res) => {
         return;
     }
 
+    const catalogCountQuery = getCatalogCountQuery(prompt);
+    if (catalogCountQuery) {
+        db.get(catalogCountQuery.sql, catalogCountQuery.params, (error, row) => {
+            if (error) {
+                console.error('Error answering catalog count question:', error);
+                return res.status(500).json({ error: 'Database error' });
+            }
+
+            return res.json({
+                answer: formatCountAnswer(row.count, catalogCountQuery.label),
+                model: 'SQLite',
+            });
+        });
+        return;
+    }
+
     const catalogQuery = buildCatalogQuery(prompt);
     runCatalogQuery(catalogQuery, (queryError, minerals) => {
         if (queryError) {
@@ -363,7 +410,10 @@ app.post('/api/gemma', (req, res) => {
 
         if (!minerals.length) {
             return res.json({
-                answer: !catalogQuery.whereClause
+                answer: catalogQuery.existenceQuestion
+                    || catalogQuery.listRecords
+                    ? 'No matching catalog records were found.'
+                    : !catalogQuery.whereClause
                     ? 'The mineral catalog is empty, so I cannot answer from catalog data yet.'
                     : CATALOG_REFUSAL,
                 model: 'Catalog',
@@ -377,23 +427,35 @@ app.post('/api/gemma', (req, res) => {
             });
         }
 
+        if (catalogQuery.describeRecords) {
+            return res.json({
+                answer: formatRecordSummaryAnswer(minerals),
+                model: 'SQLite',
+            });
+        }
+
+        if (catalogQuery.listRecords || catalogQuery.existenceQuestion) {
+            return res.json({
+                answer: formatCatalogFallbackAnswer(minerals, catalogQuery),
+                model: 'SQLite',
+            });
+        }
+
         const fullPrompt = buildGemmaPrompt(prompt, minerals, catalogQuery);
-        callGemma(fullPrompt, (gemmaError, answer) => {
-            if (gemmaError) {
-                console.error('Gemma request failed:', gemmaError.message);
+        callGemma(fullPrompt, (modelError, answer) => {
+            if (modelError) {
+                console.error('Question model request failed:', modelError.message);
                 return res.status(502).json({
-                    error: 'Gemma is unavailable. Start Ollama and make sure the configured Gemma model is installed.',
-                    details: gemmaError.message,
-                    model: GEMMA_MODEL,
-                    apiUrl: GEMMA_API_URL,
+                    error: 'The question service is unavailable. Start Ollama and make sure the configured local model is installed.',
+                    details: modelError.message,
                 });
             }
 
             if (!answerUsesCatalogCitation(answer, minerals)) {
                 return res.json({
-                    answer: formatCatalogFallbackAnswer(minerals),
+                    answer: formatCatalogFallbackAnswer(minerals, catalogQuery),
                     model: 'Catalog',
-                    warning: 'Gemma response omitted catalog citations, so a deterministic catalog answer was returned instead.',
+                    warning: 'The generated response omitted catalog citations, so a deterministic catalog answer was returned instead.',
                 });
             }
 
@@ -626,6 +688,88 @@ function formatDisplayId(id) {
     return String(id || '').padStart(4, '0');
 }
 
+function getSummaryQuery(prompt) {
+    const normalizedPrompt = prompt.toLowerCase();
+    const isSummaryQuestion = /\b(summarize|summarise|summary|breakdown|grouped by|by)\b/.test(normalizedPrompt);
+    if (!isSummaryQuestion) {
+        return null;
+    }
+
+    const groupField = findGroupByField(normalizedPrompt);
+    if (!groupField) {
+        return null;
+    }
+
+    const catalogQuery = buildCatalogQueryWithoutAnswerField(prompt);
+    const whereClause = catalogQuery.whereClause ? `WHERE ${catalogQuery.whereClause}` : '';
+
+    return {
+        field: groupField.field,
+        label: groupField.label,
+        params: catalogQuery.params,
+        sql: `
+            SELECT
+                CASE
+                    WHEN ${groupField.field} IS NULL OR TRIM(${groupField.field}) = '' THEN '(blank)'
+                    ELSE TRIM(${groupField.field})
+                END AS value,
+                COUNT(*) AS count
+            FROM minerals
+            ${whereClause}
+            GROUP BY value
+            ORDER BY count DESC, value COLLATE NOCASE ASC
+        `,
+    };
+}
+
+function buildCatalogQueryWithoutAnswerField(prompt) {
+    const normalizedPrompt = prompt.toLowerCase();
+    const filters = getCatalogFilters(normalizedPrompt, null);
+    const groupField = findGroupByField(normalizedPrompt);
+    const searchTerms = getSearchTerms(prompt, groupField, filters);
+    const whereParts = [];
+    const params = [];
+
+    filters
+        .filter((filter) => filter.fieldName !== groupField?.field)
+        .forEach((filter) => {
+            whereParts.push(filter.sql);
+            params.push(...filter.params);
+        });
+
+    searchTerms.forEach((term) => {
+        whereParts.push(`(${MINERAL_SEARCH_FIELDS.map((field) => `LOWER(${field}) LIKE ?`).join(' OR ')})`);
+        MINERAL_SEARCH_FIELDS.forEach(() => {
+            params.push(`%${escapeLike(term.toLowerCase())}%`);
+        });
+    });
+
+    return {
+        params,
+        whereClause: whereParts.length ? whereParts.join(' AND ') : '',
+    };
+}
+
+function findGroupByField(normalizedPrompt) {
+    const byMatch = normalizedPrompt.match(/\b(?:by|per|for each)\s+([a-z][a-z ]{0,40})/);
+    const targetText = byMatch ? byMatch[1].replace(/[?.!]+$/, '').trim() : normalizedPrompt;
+    return FIELD_ALIASES.find((fieldInfo) => (
+        fieldInfo.terms.some((term) => fieldTermMatches(targetText, term))
+    )) || null;
+}
+
+function formatSummaryAnswer(rows, summaryQuery) {
+    if (!rows.length) {
+        return `No catalog records matched for summary by ${summaryQuery.label}.`;
+    }
+
+    const total = rows.reduce((sum, row) => sum + row.count, 0);
+    return [
+        `Summary by ${summaryQuery.label} (${total} total):`,
+        formatMarkdownTable(['Value', 'Count'], rows.map((row) => [row.value, row.count])),
+    ].join('\n');
+}
+
 function getCountQuery(prompt) {
     const normalizedPrompt = prompt.toLowerCase();
     const isCountQuestion = /\b(how many|count|number of|total)\b/.test(normalizedPrompt);
@@ -635,6 +779,10 @@ function getCountQuery(prompt) {
 
     const filters = getCountFilters(normalizedPrompt);
     if (!filters.length) {
+        if (getSearchTerms(prompt, null, []).length) {
+            return null;
+        }
+
         return {
             sql: 'SELECT COUNT(*) AS count FROM minerals',
             params: [],
@@ -644,13 +792,14 @@ function getCountQuery(prompt) {
 
     return {
         sql: `SELECT COUNT(*) AS count FROM minerals WHERE ${filters.map((filter) => filter.sql).join(' AND ')}`,
-        params: filters.map((filter) => filter.value),
+        params: filters.flatMap((filter) => filter.params),
         label: `specimens with ${filters.map((filter) => filter.label).join(' and ')}`,
     };
 }
 
 function getCountFilters(normalizedPrompt) {
     const filters = [];
+    filters.push(...getBlankFieldFilters(normalizedPrompt));
     addCountFilter(filters, normalizedPrompt, 'type', 'type', ['element', 'mineral', 'fossil', 'manmade', 'igneous', 'sedimentary', 'metamorphic', 'meteorite', 'organic']);
     addCountFilter(filters, normalizedPrompt, 'groupName', 'group', [
         'metals',
@@ -680,9 +829,14 @@ function getCountFilters(normalizedPrompt) {
 
     const originMatch = normalizedPrompt.match(/\b(?:from|origin(?:ating)?\s+(?:from|in)|collected\s+(?:from|in))\s+([a-z0-9 .,'-]+)/);
     if (originMatch) {
-        const origin = originMatch[1].replace(/[?.!]+$/, '').trim();
+        const origin = originMatch[1]
+            .replace(/\b(in|are|is|do|does|have|my|catalog|collection|database|specimens?|minerals?)\b.*$/i, '')
+            .replace(/[?.!]+$/, '')
+            .trim();
         if (origin) {
             filters.push({
+                fieldName: 'origin',
+                params: [`%${origin}%`],
                 sql: 'LOWER(origin) LIKE ?',
                 value: `%${origin}%`,
                 label: `origin matching "${origin}"`,
@@ -693,14 +847,39 @@ function getCountFilters(normalizedPrompt) {
     return filters;
 }
 
+function getBlankFieldFilters(normalizedPrompt) {
+    const blankFieldTerms = /\b(no|without|missing|blank|empty|unset|unknown|not recorded)\b/;
+    if (!blankFieldTerms.test(normalizedPrompt)) {
+        return [];
+    }
+
+    return FIELD_ALIASES
+        .filter((fieldInfo) => fieldInfo.terms.some((term) => {
+            const pattern = escapeRegExp(term);
+            return new RegExp(`\\b(?:no|without|missing|blank|empty|unset|unknown|not recorded)\\s+${pattern}\\b`).test(normalizedPrompt)
+                || new RegExp(`\\b${pattern}\\s+(?:is\\s+)?(?:missing|blank|empty|unset|unknown|not recorded)\\b`).test(normalizedPrompt);
+        }))
+        .map((fieldInfo) => ({
+            fieldName: fieldInfo.field,
+            isBlankFilter: true,
+            params: [],
+            sql: `(${fieldInfo.field} IS NULL OR TRIM(${fieldInfo.field}) = '')`,
+            value: '',
+            label: `no ${fieldInfo.label}`,
+        }));
+}
+
 function addCountFilter(filters, normalizedPrompt, fieldName, labelName, values) {
     values.forEach((value) => {
         const singular = value.endsWith('s') ? value.slice(0, -1) : value;
         const plural = value.endsWith('s') ? value : `${value}s`;
         const pattern = new RegExp(`\\b${escapeRegExp(value)}\\b|\\b${escapeRegExp(singular)}\\b|\\b${escapeRegExp(plural)}\\b`);
         if (pattern.test(normalizedPrompt)) {
+            const values = Array.from(new Set([value, singular, plural]));
             filters.push({
-                sql: `LOWER(${fieldName}) = ?`,
+                fieldName,
+                params: values,
+                sql: `LOWER(${fieldName}) IN (${values.map(() => '?').join(', ')})`,
                 value,
                 label: `${labelName} ${value}`,
             });
@@ -709,7 +888,32 @@ function addCountFilter(filters, normalizedPrompt, fieldName, labelName, values)
 }
 
 function formatCountAnswer(count, label) {
-    return `There ${count === 1 ? 'is' : 'are'} ${count} ${label}.`;
+    const normalizedLabel = count === 1
+        ? label.replace(/\brecords\b/g, 'record').replace(/\bmatches\b/g, 'match')
+        : label;
+    return `There ${count === 1 ? 'is' : 'are'} ${count} ${normalizedLabel}.`;
+}
+
+function getCatalogCountQuery(prompt) {
+    const normalizedPrompt = prompt.toLowerCase();
+    if (!/\b(how many|count|number of|total)\b/.test(normalizedPrompt)) {
+        return null;
+    }
+
+    const catalogQuery = buildCatalogQuery(prompt);
+    if (!catalogQuery.whereClause) {
+        return null;
+    }
+
+    return {
+        sql: `
+            SELECT COUNT(*) AS count
+            FROM minerals
+            WHERE ${catalogQuery.whereClause}
+        `,
+        params: catalogQuery.params,
+        label: `matching catalog records${catalogQuery.searchTerms.length ? ` for ${catalogQuery.searchTerms.map((term) => `"${term}"`).join(', ')}` : ''}`,
+    };
 }
 
 function escapeRegExp(value) {
@@ -720,20 +924,21 @@ function buildCatalogQuery(prompt) {
     const normalizedPrompt = prompt.toLowerCase();
     const answerField = findRequestedField(normalizedPrompt);
     const requiresFullCatalog = shouldUseFullCatalog(normalizedPrompt);
-    const filters = getCatalogFilters(normalizedPrompt);
-    const searchTerms = getSearchTerms(prompt, answerField);
+    const describeRecords = /\b(describe|description|summarize|summarise|summary|overview)\b/.test(normalizedPrompt);
+    const listRecords = /\b(show|list|which)\b/.test(normalizedPrompt);
+    const existenceQuestion = /\b(do i have|any|have any)\b/.test(normalizedPrompt);
+    const filters = getCatalogFilters(normalizedPrompt, answerField);
+    const searchTerms = getSearchTerms(prompt, answerField, filters);
     const whereParts = [];
     const params = [];
 
     filters.forEach((filter) => {
         whereParts.push(filter.sql);
-        params.push(filter.value);
+        params.push(...filter.params);
     });
 
     searchTerms.forEach((term) => {
-        const searchableFields = answerField
-            ? MINERAL_SEARCH_FIELDS.filter((field) => field !== answerField.field)
-            : MINERAL_SEARCH_FIELDS;
+        const searchableFields = getSearchFieldsForQuery(answerField);
         whereParts.push(`(${searchableFields.map((field) => `LOWER(${field}) LIKE ?`).join(' OR ')})`);
         searchableFields.forEach(() => {
             params.push(`%${escapeLike(term.toLowerCase())}%`);
@@ -742,48 +947,172 @@ function buildCatalogQuery(prompt) {
 
     return {
         answerField,
+        requestedFieldName: answerField?.field || '',
         description: buildCatalogQueryDescription(filters, searchTerms, requiresFullCatalog),
+        describeRecords,
+        existenceQuestion,
+        listRecords,
         params,
         requiresFullCatalog,
+        searchTerms,
         whereClause: whereParts.length ? whereParts.join(' AND ') : '',
     };
 }
 
+function getSearchFieldsForQuery(answerField) {
+    if (!answerField) {
+        return MINERAL_SEARCH_FIELDS;
+    }
+
+    return answerField.field === 'name'
+        ? ['specimenId']
+        : ['specimenId', 'name'];
+}
+
 function runCatalogQuery(catalogQuery, callback) {
-    const sql = `
+    if ((catalogQuery.listRecords || catalogQuery.existenceQuestion || catalogQuery.describeRecords) && catalogQuery.searchTerms.length) {
+        const identityQuery = buildSearchCatalogSql(catalogQuery, ['specimenId', 'name']);
+        db.all(identityQuery.sql, identityQuery.params, (identityError, identityRows) => {
+            if (identityError || identityRows.length) {
+                callback(identityError, identityRows);
+                return;
+            }
+
+            const query = buildCatalogSql(catalogQuery, false);
+            db.all(query.sql, query.params, callback);
+        });
+        return;
+    }
+
+    if (catalogQuery.answerField && catalogQuery.searchTerms.length === 1) {
+        const exactQuery = buildCatalogSql(catalogQuery, true);
+        db.all(exactQuery.sql, exactQuery.params, (exactError, exactRows) => {
+            if (exactError || exactRows.length) {
+                callback(exactError, exactRows);
+                return;
+            }
+
+            const fallbackQuery = buildCatalogSql(catalogQuery, false);
+            db.all(fallbackQuery.sql, fallbackQuery.params, callback);
+        });
+        return;
+    }
+
+    const query = buildCatalogSql(catalogQuery, false);
+    db.all(query.sql, query.params, callback);
+}
+
+function buildSearchCatalogSql(catalogQuery, searchFields) {
+    const originalSearchFieldCount = getSearchFieldsForQuery(catalogQuery.answerField).length;
+    const searchParamCount = catalogQuery.searchTerms.length * originalSearchFieldCount;
+    const filterParams = catalogQuery.params.slice(0, catalogQuery.params.length - searchParamCount);
+    const filterClause = getFilterWhereClause(catalogQuery);
+    const searchParts = [];
+    const searchParams = [];
+
+    catalogQuery.searchTerms.forEach((term) => {
+        searchParts.push(`(${searchFields.map((field) => `LOWER(${field}) LIKE ?`).join(' OR ')})`);
+        searchFields.forEach(() => {
+            searchParams.push(`%${escapeLike(term.toLowerCase())}%`);
+        });
+    });
+
+    const whereClause = [filterClause, ...searchParts].filter(Boolean).join(' AND ');
+
+    return {
+        params: filterParams.concat(searchParams),
+        sql: formatCatalogSql(whereClause),
+    };
+}
+
+function buildCatalogSql(catalogQuery, exactIdentityMatch) {
+    if (!exactIdentityMatch) {
+        return {
+            params: catalogQuery.params,
+            sql: formatCatalogSql(catalogQuery.whereClause),
+        };
+    }
+
+    const searchFieldCount = getSearchFieldsForQuery(catalogQuery.answerField).length;
+    const searchParamCount = catalogQuery.searchTerms.length * searchFieldCount;
+    const filterParams = catalogQuery.params.slice(0, catalogQuery.params.length - searchParamCount);
+    const filterClause = getFilterWhereClause(catalogQuery);
+    const exactParts = [];
+    const exactParams = [];
+
+    catalogQuery.searchTerms.forEach((term) => {
+        exactParts.push('(LOWER(specimenId) = ? OR LOWER(name) = ?)');
+        exactParams.push(term.toLowerCase(), term.toLowerCase());
+    });
+
+    const whereClause = [filterClause, exactParts.length ? `(${exactParts.join(' OR ')})` : '']
+        .filter(Boolean)
+        .join(' AND ');
+
+    return {
+        params: filterParams.concat(exactParams),
+        sql: formatCatalogSql(whereClause),
+    };
+}
+
+function getFilterWhereClause(catalogQuery) {
+    if (!catalogQuery.searchTerms.length) {
+        return catalogQuery.whereClause;
+    }
+
+    const parts = catalogQuery.whereClause.split(' AND ');
+    return parts.slice(0, Math.max(0, parts.length - catalogQuery.searchTerms.length)).join(' AND ');
+}
+
+function formatCatalogSql(whereClause) {
+    return `
         SELECT ${MINERAL_SELECT_FIELDS.join(', ')}
         FROM minerals
-        ${catalogQuery.whereClause ? `WHERE ${catalogQuery.whereClause}` : ''}
+        ${whereClause ? `WHERE ${whereClause}` : ''}
         ORDER BY id DESC
     `;
-    db.all(sql, catalogQuery.params, callback);
 }
 
 function findRequestedField(normalizedPrompt) {
-    return FIELD_ALIASES.find((fieldInfo) => (
-        fieldInfo.terms.some((term) => new RegExp(`\\b${escapeRegExp(term)}\\b`).test(normalizedPrompt))
-    )) || null;
+    const matches = FIELD_ALIASES
+        .map((fieldInfo) => ({
+            fieldInfo,
+            score: fieldInfo.terms.reduce((bestScore, term) => {
+                if (!fieldTermMatches(normalizedPrompt, term)) {
+                    return bestScore;
+                }
+                return Math.max(bestScore, term.split(/\s+/).length);
+            }, 0),
+        }))
+        .filter((match) => match.score > 0)
+        .sort((left, right) => right.score - left.score);
+
+    return matches[0]?.fieldInfo || null;
 }
 
 function shouldUseFullCatalog(normalizedPrompt) {
     return /\b(all|every|entire|whole|catalog|catalogue|collection|records|saved|latest|recent|newest|oldest|missing|compare|summary|summarize|summarise|overview)\b/.test(normalizedPrompt);
 }
 
-function getCatalogFilters(normalizedPrompt) {
+function getCatalogFilters(normalizedPrompt, answerField) {
     const filters = getCountFilters(normalizedPrompt);
-    return filters.map((filter) => ({
-        sql: filter.sql,
-        value: filter.value,
-        label: filter.label,
-    }));
+    return filters
+        .filter((filter) => filter.isBlankFilter || filter.fieldName !== answerField?.field)
+        .map((filter) => ({
+            params: filter.params,
+            sql: filter.sql,
+            value: filter.value,
+            label: filter.label,
+        }));
 }
 
-function getSearchTerms(prompt, answerField) {
+function getSearchTerms(prompt, answerField, filters = []) {
     const aliasWords = new Set();
     FIELD_ALIASES.forEach((fieldInfo) => {
         fieldInfo.terms.forEach((term) => {
             term.split(/\s+/).forEach((word) => aliasWords.add(word));
         });
+        splitCamelCase(fieldInfo.field).forEach((word) => aliasWords.add(word));
     });
 
     if (answerField) {
@@ -791,6 +1120,12 @@ function getSearchTerms(prompt, answerField) {
             term.split(/\s+/).forEach((word) => aliasWords.add(word));
         });
     }
+
+    filters.forEach((filter) => {
+        filter.params.forEach((param) => {
+            String(param || '').split(/\s+/).forEach((word) => aliasWords.add(word));
+        });
+    });
 
     const quotedTerms = Array.from(prompt.matchAll(/"([^"]+)"/g))
         .map((match) => normalizeSearchTerm(match[1]))
@@ -811,11 +1146,45 @@ function getSearchTerms(prompt, answerField) {
     return Array.from(new Set([...quotedTerms, ...terms]));
 }
 
-function normalizeSearchTerm(term) {
-    return String(term || '')
+function fieldTermMatches(normalizedPrompt, term) {
+    return new RegExp(`\\b${escapeRegExp(term)}\\b`).test(normalizedPrompt);
+}
+
+function splitCamelCase(value) {
+    return String(value || '')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
         .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean);
+}
+
+function normalizeSearchTerm(term) {
+    const normalizedTerm = String(term || '')
+        .toLowerCase()
+        .replace(/'s\b/g, '')
+        .replace(/[']/g, '')
         .replace(/^[.'-]+|[.'-]+$/g, '')
         .trim();
+
+    return singularizeSearchTerm(normalizedTerm);
+}
+
+function singularizeSearchTerm(term) {
+    if (term.length > 4 && term.endsWith('ies')) {
+        return `${term.slice(0, -3)}y`;
+    }
+
+    if (
+        term.length > 4
+        && term.endsWith('s')
+        && !term.endsWith('ss')
+        && !term.endsWith('us')
+        && !term.endsWith('is')
+    ) {
+        return term.slice(0, -1);
+    }
+
+    return term;
 }
 
 function buildCatalogQueryDescription(filters, searchTerms, requiresFullCatalog) {
@@ -848,8 +1217,10 @@ function buildGemmaPrompt(userPrompt, minerals, catalogQuery) {
         'The catalog records below are your only source of truth.',
         'Do not use general geology knowledge, training data, outside facts, assumptions, or guesses.',
         'If the catalog records do not contain enough information to answer, say: "The catalog does not contain enough information to answer that."',
+        'Use field names exactly as provided in the JSON records. Do not treat type, groupName, and subgroup as interchangeable.',
         'When answering with facts, mention the relevant specimenId or catalog id from the records.',
         'Keep answers concise.',
+        `Available catalog fields: ${MINERAL_SELECT_FIELDS.join(', ')}.`,
         `The server selected records using: ${catalogQuery.description}.`,
         '',
         'CATALOG_RECORDS_JSON:',
@@ -860,12 +1231,33 @@ function buildGemmaPrompt(userPrompt, minerals, catalogQuery) {
 }
 
 function formatFieldAnswer(minerals, answerField) {
-    const lines = minerals.map((mineral) => {
-        const label = formatMineralReference(mineral);
-        const value = mineral[answerField.field];
-        return `${label}: ${answerField.label} is ${formatCatalogValue(value)}.`;
-    });
-    return lines.join('\n');
+    return formatMarkdownTable(
+        ['Specimen ID', 'Name', 'Catalog ID', answerField.label],
+        minerals.map((mineral) => [
+            mineral.specimenId || '',
+            mineral.name || '',
+            mineral.id,
+            formatCatalogValue(mineral[answerField.field]),
+        ])
+    );
+}
+
+function formatRecordSummaryAnswer(minerals) {
+    return formatMarkdownTable(
+        ['Specimen ID', 'Name', 'Catalog ID', 'Type', 'Group', 'Subgroup', 'Origin', 'Description', 'Observations', 'Strunz'],
+        minerals.map((mineral) => [
+            mineral.specimenId || '',
+            mineral.name || '',
+            mineral.id,
+            mineral.type || '',
+            mineral.groupName || '',
+            mineral.subgroup || '',
+            mineral.origin || '',
+            mineral.description || '',
+            mineral.observations || '',
+            mineral.strunz || '',
+        ])
+    );
 }
 
 function formatCatalogValue(value) {
@@ -887,22 +1279,52 @@ function answerUsesCatalogCitation(answer, minerals) {
     });
 }
 
-function formatCatalogFallbackAnswer(minerals) {
-    const previewRows = minerals.slice(0, 25).map((mineral) => {
-        const details = [
-            mineral.type && `type: ${mineral.type}`,
-            mineral.groupName && `group: ${mineral.groupName}`,
-            mineral.subgroup && `subgroup: ${mineral.subgroup}`,
-            mineral.origin && `origin: ${mineral.origin}`,
-        ].filter(Boolean);
-        return `${formatMineralReference(mineral)}${details.length ? ` (${details.join(', ')})` : ''}`;
-    });
+function formatCatalogFallbackAnswer(minerals, catalogQuery) {
+    if (catalogQuery?.answerField) {
+        return formatFieldAnswer(minerals, catalogQuery.answerField);
+    }
+
+    const previewRows = minerals.slice(0, 25);
 
     const suffix = minerals.length > previewRows.length
         ? `\n${minerals.length - previewRows.length} more matching catalog record(s) were found.`
         : '';
 
-    return `Matching catalog record(s):\n${previewRows.join('\n')}${suffix}`;
+    const prefix = catalogQuery?.existenceQuestion
+        ? 'Yes. Matching catalog record(s):'
+        : 'Matching catalog record(s):';
+
+    return [
+        prefix,
+        formatMarkdownTable(
+            ['Specimen ID', 'Name', 'Catalog ID', 'Type', 'Group', 'Subgroup', 'Origin'],
+            previewRows.map((mineral) => [
+                mineral.specimenId || '',
+                mineral.name || '',
+                mineral.id,
+                mineral.type || '',
+                mineral.groupName || '',
+                mineral.subgroup || '',
+                mineral.origin || '',
+            ])
+        ),
+        suffix.trim(),
+    ].filter(Boolean).join('\n');
+}
+
+function formatMarkdownTable(headers, rows) {
+    return [
+        `| ${headers.map(formatMarkdownCell).join(' | ')} |`,
+        `| ${headers.map(() => '---').join(' | ')} |`,
+        ...rows.map((row) => `| ${row.map(formatMarkdownCell).join(' | ')} |`),
+    ].join('\n');
+}
+
+function formatMarkdownCell(value) {
+    const text = String(value ?? '').trim();
+    return (text || 'not recorded')
+        .replace(/\|/g, '/')
+        .replace(/\r?\n/g, ' ');
 }
 
 function formatMineralReference(mineral) {
@@ -927,7 +1349,7 @@ function callGemma(prompt, callback) {
     try {
         url = new URL(GEMMA_API_URL);
     } catch (error) {
-        callback(new Error(`Invalid GEMMA_API_URL: ${GEMMA_API_URL}`));
+        callback(new Error('Invalid question service URL'));
         return;
     }
 
@@ -960,7 +1382,7 @@ function callGemma(prompt, callback) {
         });
         response.on('end', () => {
             if (response.statusCode < 200 || response.statusCode >= 300) {
-                callback(new Error(`Gemma API returned HTTP ${response.statusCode}: ${body}`));
+                callback(new Error(`Question service returned HTTP ${response.statusCode}: ${body}`));
                 return;
             }
 
@@ -968,13 +1390,13 @@ function callGemma(prompt, callback) {
                 const parsed = JSON.parse(body);
                 callback(null, parsed.response || '');
             } catch (error) {
-                callback(new Error('Gemma API returned invalid JSON'));
+                callback(new Error('Question service returned invalid JSON'));
             }
         });
     });
 
     request.on('timeout', () => {
-        request.destroy(new Error('Gemma request timed out'));
+        request.destroy(new Error('Question service request timed out'));
     });
     request.on('error', callback);
     request.write(payload);
