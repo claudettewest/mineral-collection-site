@@ -238,6 +238,66 @@ button:active {
     color: #ff9cac;
 }
 
+.gemma-assistant {
+    display: grid;
+    gap: 16px;
+}
+
+.gemma-chat {
+    display: grid;
+    gap: 12px;
+    max-height: 460px;
+    overflow-y: auto;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: #161b23;
+}
+
+.gemma-empty {
+    margin: 0;
+    color: var(--muted);
+}
+
+.gemma-message {
+    max-width: min(760px, 100%);
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel-strong);
+    overflow-wrap: anywhere;
+}
+
+.gemma-message.user {
+    justify-self: end;
+    background: #1f3937;
+    border-color: #315f5a;
+}
+
+.gemma-message.error {
+    border-color: #8c2f3d;
+    background: #341a22;
+}
+
+.gemma-message.status {
+    color: var(--muted);
+}
+
+.gemma-message strong {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--accent);
+}
+
+.gemma-message p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+.gemma-form textarea {
+    min-height: 140px;
+}
+
 table {
     width: 100%;
     border-collapse: collapse;

@@ -2,14 +2,17 @@
     const mineralForm = new MineralForm();
     const mineralList = new MineralList();
     const uploadForm = new UploadForm();
+    const gemmaAssistant = new GemmaAssistant();
 
     const landingPage = document.getElementById('landing-page');
     const addButton = document.getElementById('add-specimen-button');
     const viewEntriesButton = document.getElementById('view-entries-button');
     const uploadButton = document.getElementById('upload-button');
+    const gemmaButton = document.getElementById('gemma-button');
     const formContainer = document.getElementById('form-container');
     const uploadContainer = document.getElementById('upload-container');
     const listContainer = document.getElementById('list-container');
+    const gemmaContainer = document.getElementById('gemma-container');
 
     const backButton = document.createElement('button');
     backButton.textContent = 'Back';
@@ -26,6 +29,7 @@
     formContainer.appendChild(mineralForm.render());
     uploadContainer.appendChild(uploadForm.render());
     listContainer.appendChild(mineralList.render());
+    gemmaContainer.appendChild(gemmaAssistant.render());
 
     addButton.addEventListener('click', () => {
         mineralForm.clear();
@@ -41,11 +45,16 @@
         showUpload();
     });
 
+    gemmaButton.addEventListener('click', () => {
+        showGemma();
+    });
+
     function showLanding() {
         landingPage.style.display = '';
         formContainer.style.display = 'none';
         uploadContainer.style.display = 'none';
         listContainer.style.display = 'none';
+        gemmaContainer.style.display = 'none';
         backButton.style.display = 'none';
     }
 
@@ -54,6 +63,7 @@
         formContainer.style.display = '';
         uploadContainer.style.display = 'none';
         listContainer.style.display = 'none';
+        gemmaContainer.style.display = 'none';
         backButton.style.display = '';
     }
 
@@ -62,6 +72,7 @@
         formContainer.style.display = 'none';
         uploadContainer.style.display = '';
         listContainer.style.display = 'none';
+        gemmaContainer.style.display = 'none';
         backButton.style.display = '';
     }
 
@@ -70,6 +81,16 @@
         formContainer.style.display = 'none';
         uploadContainer.style.display = 'none';
         listContainer.style.display = '';
+        gemmaContainer.style.display = 'none';
+        backButton.style.display = '';
+    }
+
+    function showGemma() {
+        landingPage.style.display = 'none';
+        formContainer.style.display = 'none';
+        uploadContainer.style.display = 'none';
+        listContainer.style.display = 'none';
+        gemmaContainer.style.display = '';
         backButton.style.display = '';
     }
 
