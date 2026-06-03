@@ -4,6 +4,7 @@ class GemmaAssistant {
     }
 
     render() {
+        this._clearStaleQuestionApiBase();
         this.container = document.createElement('div');
         this.container.className = 'gemma-assistant';
         this.container.innerHTML = `
@@ -57,15 +58,7 @@ class GemmaAssistant {
         this._setLoading(true);
         this._renderMessages();
 
-        fetch('/api/gemma', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt }),
-        })
-            .then((response) => response.json().then((body) => ({
-                ok: response.ok,
-                body,
-            })))
+        this._requestQuestion(prompt)
             .then(({ ok, body }) => {
                 this._removeStatusMessage();
                 if (!ok) {
@@ -85,6 +78,124 @@ class GemmaAssistant {
                 this._setLoading(false);
                 this._renderMessages();
             });
+    }
+
+    _requestQuestion(prompt) {
+        const urls = this._questionApiUrls();
+        let index = 0;
+        let lastError = null;
+
+        const tryNext = () => this._postQuestion(urls[index], prompt, index === 0 ? 150000 : 10000)
+            .then((result) => {
+                this._rememberQuestionApiUrl(urls[index]);
+                if (result.body?.returnedAppPage && index < urls.length - 1) {
+                    index += 1;
+                    return tryNext();
+                }
+                return result;
+            })
+            .catch((error) => {
+                lastError = error;
+                if (index >= urls.length - 1) {
+                    throw new Error(this._questionApiErrorMessage(lastError));
+                }
+
+                index += 1;
+                return tryNext();
+            });
+
+        return tryNext();
+    }
+
+    _questionApiErrorMessage(error) {
+        if (error?.name === 'AbortError') {
+            return 'The question API did not respond. Make sure the Node server is running and reachable from this device.';
+        }
+
+        return 'The question API could not be reached. Make sure the Node server is running and reachable from this device.';
+    }
+
+    _postQuestion(url, prompt, timeoutMs) {
+        return this._fetchWithTimeout(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt }),
+        }, timeoutMs).then((response) => this._readJsonResponse(response));
+    }
+
+    _fetchWithTimeout(url, options, timeoutMs) {
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(() => {
+            controller.abort();
+        }, timeoutMs);
+
+        return fetch(url, {
+            ...options,
+            signal: controller.signal,
+        })
+            .finally(() => {
+                window.clearTimeout(timeoutId);
+            });
+    }
+
+    _questionApiUrls() {
+        const urls = ['/api/gemma'];
+        const savedBase = this._savedQuestionApiBase();
+        if (savedBase && savedBase !== window.location.origin) {
+            urls.push(`${savedBase}/api/gemma`);
+        }
+
+        return Array.from(new Set(urls));
+    }
+
+    _savedQuestionApiBase() {
+        try {
+            return window.localStorage.getItem('questionApiBase');
+        } catch (error) {
+            return '';
+        }
+    }
+
+    _rememberQuestionApiUrl(url) {
+        try {
+            const parsedUrl = new URL(url, window.location.href);
+            if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
+                window.localStorage.setItem('questionApiBase', parsedUrl.origin);
+            }
+        } catch (error) {
+            // Relative same-origin URLs do not need persistence.
+        }
+    }
+
+    _clearStaleQuestionApiBase() {
+        try {
+            if (window.location.protocol === 'http:' && window.location.port === '3011') {
+                window.localStorage.removeItem('questionApiBase');
+            }
+        } catch (error) {
+            // localStorage can be unavailable in some mobile browser modes.
+        }
+    }
+
+    _readJsonResponse(response) {
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+            return response.text().then((text) => {
+                const isHtml = /^\s*<!doctype html/i.test(text) || /^\s*<html/i.test(text);
+                const message = isHtml
+                    ? 'The question API returned the app page instead of JSON. Make sure this page is opened through the Node server, not as a static file.'
+                    : 'The question API returned a non-JSON response.';
+                return {
+                    ok: false,
+                    body: { error: message, returnedAppPage: isHtml },
+                };
+            });
+        }
+
+        return response.json().then((body) => ({
+            ok: response.ok,
+            body,
+        }));
     }
 
     _setLoading(isLoading) {

@@ -420,6 +420,77 @@ a:hover {
     overflow-x: auto;
 }
 
+.mineral-search {
+    display: grid;
+    grid-template-columns: minmax(240px, 1fr) max-content max-content;
+    gap: 12px;
+    align-items: end;
+    margin-bottom: 16px;
+}
+
+.mineral-search label {
+    margin-bottom: 0;
+}
+
+.mineral-search input {
+    margin-bottom: 0;
+}
+
+.mineral-details-dialog {
+    width: min(720px, calc(100% - 24px));
+    max-height: min(760px, calc(100dvh - 24px));
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel);
+    color: var(--text);
+}
+
+.mineral-details-dialog::backdrop {
+    background: rgb(0 0 0 / 0.62);
+}
+
+.mineral-details-content {
+    display: grid;
+    gap: 16px;
+    padding: 16px;
+}
+
+.details-header {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.details-header h3 {
+    margin: 0;
+    color: var(--accent);
+    font-size: 1.25rem;
+}
+
+.mineral-details-dialog dl {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px 16px;
+    margin: 0;
+}
+
+.mineral-details-dialog dl > div {
+    min-width: 0;
+}
+
+.mineral-details-dialog dt {
+    color: var(--muted);
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.mineral-details-dialog dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
 .row-actions {
     display: flex;
     gap: 8px;
@@ -504,6 +575,15 @@ a:hover {
     .upload-actions {
         grid-template-columns: 1fr;
         align-items: stretch;
+    }
+
+    .mineral-search {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .mineral-search button {
+        width: 100%;
     }
 
     form {
@@ -607,6 +687,32 @@ a:hover {
 
     .row-actions {
         justify-content: flex-start;
+    }
+
+    .mineral-list {
+        overflow-x: visible;
+    }
+
+    .mineral-list tbody tr {
+        cursor: pointer;
+    }
+
+    .mineral-list tbody td:nth-child(n+3) {
+        display: none;
+    }
+
+    .mineral-list tbody td:nth-child(1),
+    .mineral-list tbody td:nth-child(2) {
+        display: grid;
+        grid-template-columns: minmax(92px, 36%) 1fr;
+    }
+
+    .mineral-details-content {
+        padding: 14px;
+    }
+
+    .mineral-details-dialog dl {
+        grid-template-columns: 1fr;
     }
 }
 

@@ -309,6 +309,19 @@ db.serialize(() => {
 });
 
 app.use(bodyParser.json({ limit: '20mb' }));
+app.use('/api', (req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    if (req.method === 'OPTIONS') {
+        res.status(204).send();
+        return;
+    }
+    next();
+});
+app.get('/diamond.ico', (req, res) => {
+    res.sendFile(path.join(__dirname, 'diamond.ico'));
+});
 app.use(express.static(path.join(__dirname, 'src')));
 
 app.get('/api/minerals', (req, res) => {
@@ -345,6 +358,10 @@ app.get('/api/minerals/csv-template', (req, res) => {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="mineral-upload-template.csv"');
     res.send(`${IMPORTABLE_FIELDS.join(',')}\n`);
+});
+
+app.get('/api/health', (req, res) => {
+    res.json({ ok: true });
 });
 
 app.post('/api/gemma', (req, res) => {
@@ -441,25 +458,9 @@ app.post('/api/gemma', (req, res) => {
             });
         }
 
-        const fullPrompt = buildGemmaPrompt(prompt, minerals, catalogQuery);
-        callGemma(fullPrompt, (modelError, answer) => {
-            if (modelError) {
-                console.error('Question model request failed:', modelError.message);
-                return res.status(502).json({
-                    error: 'The question service is unavailable. Start Ollama and make sure the configured local model is installed.',
-                    details: modelError.message,
-                });
-            }
-
-            if (!answerUsesCatalogCitation(answer, minerals)) {
-                return res.json({
-                    answer: formatCatalogFallbackAnswer(minerals, catalogQuery),
-                    model: 'Catalog',
-                    warning: 'The generated response omitted catalog citations, so a deterministic catalog answer was returned instead.',
-                });
-            }
-
-            res.json({ answer, model: GEMMA_MODEL });
+        return res.json({
+            answer: formatCatalogFallbackAnswer(minerals, catalogQuery),
+            model: 'SQLite',
         });
     });
 });
@@ -1373,7 +1374,7 @@ function callGemma(prompt, callback) {
             'Content-Type': 'application/json',
             'Content-Length': Buffer.byteLength(payload),
         },
-        timeout: 120000,
+        timeout: 45000,
     }, (response) => {
         let body = '';
         response.setEncoding('utf8');
@@ -1396,7 +1397,7 @@ function callGemma(prompt, callback) {
     });
 
     request.on('timeout', () => {
-        request.destroy(new Error('Question service request timed out'));
+        request.destroy(new Error('Question service request timed out after 45 seconds'));
     });
     request.on('error', callback);
     request.write(payload);
@@ -1552,25 +1553,22 @@ function insertCsvRecords(records, callback) {
     });
 }
 
+app.use('/api', (req, res) => {
+    res.status(404).json({ error: 'API route not found' });
+});
+
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'src', 'index.html'));
 });
 
-const requestedPort = Number(process.env.PORT) || 3000;
-const maxPortAttempts = process.env.PORT ? 1 : 10;
+const requestedPort = Number(process.env.PORT) || 3011;
 
-function startServer(port, attemptsLeft = maxPortAttempts) {
+function startServer(port) {
     const server = app.listen(port, () => {
         console.log(`Mineral collection server running at http://localhost:${port}`);
     });
 
     server.on('error', (error) => {
-        if (error.code === 'EADDRINUSE' && attemptsLeft > 1) {
-            console.warn(`Port ${port} is already in use. Trying port ${port + 1}...`);
-            startServer(port + 1, attemptsLeft - 1);
-            return;
-        }
-
         console.error(`Failed to start server on port ${port}:`, error.message);
         process.exit(1);
     });
