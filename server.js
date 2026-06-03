@@ -1561,7 +1561,7 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'src', 'index.html'));
 });
 
-const requestedPort = Number(process.env.PORT) || 3011;
+const requestedPort = 3011;
 
 function startServer(port) {
     const server = app.listen(port, () => {

@@ -5,6 +5,9 @@
   "main": "src/app.js",
   "scripts": {
     "start": "node server.js",
+    "start:prod": "node server.js",
+    "install:startup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-startup-task.ps1",
+    "uninstall:startup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/uninstall-startup-task.ps1",
     "build": "webpack --mode production",
     "dev": "node server.js"
   },
