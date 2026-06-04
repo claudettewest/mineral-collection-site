@@ -21,6 +21,7 @@
         this.container.className = 'mineral-list';
         this.container.innerHTML = `
             <h2>Mineral Collection</h2>
+            <p class="collection-note">Click on specimen to view details.</p>
             <form class="mineral-search" role="search">
                 <label>
                     Search entries
@@ -53,11 +54,22 @@
                         <h3 data-role="details-title"></h3>
                         <button class="icon-button" type="button" data-action="close-details" aria-label="Close details">&times;</button>
                     </div>
+                    <div class="details-photo-strip-wrap" data-role="details-photos-wrap" hidden>
+                        <button class="icon-button" type="button" data-action="scroll-photos-left" aria-label="Previous photos">&lsaquo;</button>
+                        <div class="details-photos" data-role="details-photos"></div>
+                        <button class="icon-button" type="button" data-action="scroll-photos-right" aria-label="Next photos">&rsaquo;</button>
+                    </div>
                     <dl data-role="details-body"></dl>
                     <div class="form-buttons">
                         <button type="button" data-action="details-edit">Edit</button>
                         <button class="danger-button" type="button" data-action="details-delete">Delete</button>
                     </div>
+                </div>
+            </dialog>
+            <dialog class="photo-viewer-dialog" data-role="photo-viewer">
+                <div class="photo-viewer-content">
+                    <button class="icon-button" type="button" data-action="close-photo-viewer" aria-label="Close photo">&times;</button>
+                    <img data-role="photo-viewer-image" alt="">
                 </div>
             </dialog>
         `;
@@ -66,7 +78,11 @@
         this.searchInput = this.searchForm.querySelector('input[name="search"]');
         this.detailsDialog = this.container.querySelector('[data-role="details-dialog"]');
         this.detailsTitle = this.container.querySelector('[data-role="details-title"]');
+        this.detailsPhotosWrap = this.container.querySelector('[data-role="details-photos-wrap"]');
+        this.detailsPhotos = this.container.querySelector('[data-role="details-photos"]');
         this.detailsBody = this.container.querySelector('[data-role="details-body"]');
+        this.photoViewerDialog = this.container.querySelector('[data-role="photo-viewer"]');
+        this.photoViewerImage = this.container.querySelector('[data-role="photo-viewer-image"]');
         this.activeDetailsMineral = null;
         this.container.querySelectorAll('[data-sort-field]').forEach((button) => {
             button.addEventListener('click', () => {
@@ -101,6 +117,15 @@
                 this.detailsDialog.close();
                 this.onDeleteCallback(this.activeDetailsMineral);
             }
+        });
+        this.container.querySelector('[data-action="close-photo-viewer"]').addEventListener('click', () => {
+            this.photoViewerDialog.close();
+        });
+        this.container.querySelector('[data-action="scroll-photos-left"]').addEventListener('click', () => {
+            this._scrollDetailsPhotos(-1);
+        });
+        this.container.querySelector('[data-action="scroll-photos-right"]').addEventListener('click', () => {
+            this._scrollDetailsPhotos(1);
         });
         return this.container;
     }
@@ -216,7 +241,7 @@
         }
 
         const title = name ? ` title="${this._escape(name)}"` : '';
-        return `<a class="mineral-thumbnail-link" href="${this._escape(src)}" target="_blank" rel="noopener noreferrer"${title}><img class="mineral-thumbnail" src="${this._escape(src)}" alt="${this._escape(`${mineralName} thumbnail`)}" loading="lazy" /></a>`;
+        return `<span class="mineral-thumbnail-link"${title}><img class="mineral-thumbnail" src="${this._escape(src)}" alt="${this._escape(`${mineralName} thumbnail`)}" loading="lazy" /></span>`;
     }
 
     _sortBy(field) {
@@ -267,12 +292,14 @@
             mineral.description,
             mineral.observations,
             mineral.strunz,
+            mineral.dana,
         ].some((value) => String(value || '').toLowerCase().includes(term)));
     }
 
     _openDetails(mineral) {
         this.activeDetailsMineral = mineral;
         this.detailsTitle.textContent = `${mineral.specimenId || this._formatId(mineral.id)} ${mineral.name || ''}`.trim();
+        const photos = this._getPhotos(mineral);
         const fields = [
             ['Specimen Number', mineral.specimenId],
             ['Name', mineral.name],
@@ -285,6 +312,7 @@
             ['Description', mineral.description],
             ['Observations', mineral.observations],
             ['Strunz', mineral.strunz],
+            ['DANA', mineral.dana],
             ['Colour', mineral.colour],
             ['Streak', mineral.streak],
             ['Hardness', mineral.hardness],
@@ -307,12 +335,27 @@
             ['Peroxide', mineral.peroxide],
             ['Conductivity', mineral.conductivity],
         ];
-        this.detailsBody.innerHTML = fields.map(([label, value]) => `
+        const maintainedFields = fields.filter(([, value]) => this._hasMaintainedValue(value));
+
+        this.detailsPhotosWrap.hidden = !photos.length;
+        this.detailsPhotos.innerHTML = photos.length
+            ? `
+                ${photos.map((photo, index) => this._renderDetailPhoto(photo, mineral.name, index)).join('')}
+            `
+            : '';
+
+        this.detailsBody.innerHTML = maintainedFields.map(([label, value]) => `
             <div>
                 <dt>${this._escape(label)}</dt>
-                <dd>${this._escape(value || 'Not recorded')}</dd>
+                <dd>${this._escape(value)}</dd>
             </div>
         `).join('');
+
+        this.detailsPhotos.querySelectorAll('[data-photo-src]').forEach((button) => {
+            button.addEventListener('click', () => {
+                this._openPhotoViewer(button.dataset.photoSrc, button.dataset.photoName);
+            });
+        });
 
         if (typeof this.detailsDialog.showModal === 'function') {
             this.detailsDialog.showModal();
@@ -325,6 +368,40 @@
         }
 
         return mineral[field] || '';
+    }
+
+    _hasMaintainedValue(value) {
+        return value !== null && value !== undefined && String(value).trim() !== '';
+    }
+
+    _renderDetailPhoto(photo, mineralName, index) {
+        const src = typeof photo === 'string' ? photo : photo?.dataUrl;
+        const name = typeof photo === 'string' ? mineralName : photo?.name || `${mineralName} photo ${index + 1}`;
+        if (!src) {
+            return '';
+        }
+
+        return `
+            <button class="details-photo-link" type="button" data-photo-src="${this._escape(src)}" data-photo-name="${this._escape(name)}">
+                <img class="details-photo" src="${this._escape(src)}" alt="${this._escape(name)}" loading="lazy">
+            </button>
+        `;
+    }
+
+    _openPhotoViewer(src, name) {
+        this.photoViewerImage.src = src;
+        this.photoViewerImage.alt = name || 'Specimen photo';
+        if (typeof this.photoViewerDialog.showModal === 'function') {
+            this.photoViewerDialog.showModal();
+        }
+    }
+
+    _scrollDetailsPhotos(direction) {
+        const distance = Math.max(160, Math.floor(this.detailsPhotos.clientWidth * 0.8));
+        this.detailsPhotos.scrollBy({
+            left: direction * distance,
+            behavior: 'smooth',
+        });
     }
 
     _updateSortIndicators() {

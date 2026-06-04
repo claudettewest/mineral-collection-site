@@ -10,6 +10,7 @@ const app = express();
 const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024 * 1024;
 const GEMMA_MODEL = process.env.GEMMA_MODEL || 'gemma3:1b';
 const GEMMA_API_URL = process.env.GEMMA_API_URL || 'http://localhost:11434/api/generate';
+const MINDAT_API_TOKEN = process.env.MINDAT_API_TOKEN || '';
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 },
@@ -48,6 +49,7 @@ const MINERAL_SELECT_FIELDS = [
     'peroxide',
     'conductivity',
     'strunz',
+    'dana',
 ];
 const MINERAL_SEARCH_FIELDS = [
     'specimenId',
@@ -82,6 +84,7 @@ const MINERAL_SEARCH_FIELDS = [
     'peroxide',
     'conductivity',
     'strunz',
+    'dana',
 ];
 const FIELD_ALIASES = [
     { field: 'specimenId', label: 'specimen ID', terms: ['specimen id', 'specimen ids', 'catalog number', 'catalog numbers'] },
@@ -116,6 +119,7 @@ const FIELD_ALIASES = [
     { field: 'peroxide', label: 'peroxide reaction', terms: ['peroxide'] },
     { field: 'conductivity', label: 'conductivity', terms: ['conductivity', 'conductive'] },
     { field: 'strunz', label: 'Strunz classification', terms: ['strunz'] },
+    { field: 'dana', label: 'DANA classification', terms: ['dana', 'dana classification'] },
 ];
 const QUERY_STOPWORDS = new Set([
     'about',
@@ -213,6 +217,7 @@ const EXTRA_MINERAL_FIELDS = [
     'conductivity',
     'observations',
     'strunz',
+    'dana',
 ];
 const IMPORTABLE_FIELDS = [
     'specimenId',
@@ -228,6 +233,7 @@ const IMPORTABLE_FIELDS = [
     'groupName',
     'subgroup',
     'strunz',
+    'dana',
     'colour',
     'streak',
     'hardness',
@@ -296,6 +302,7 @@ db.serialize(() => {
             conductivity TEXT,
             observations TEXT,
             strunz TEXT,
+            dana TEXT,
             createdAt TEXT
         )
     `);
@@ -322,6 +329,7 @@ app.use('/api', (req, res, next) => {
 app.get('/diamond.ico', (req, res) => {
     res.sendFile(path.join(__dirname, 'diamond.ico'));
 });
+app.use('/maps', express.static(path.join(__dirname, 'maps')));
 app.use(express.static(path.join(__dirname, 'src')));
 
 app.get('/api/minerals', (req, res) => {
@@ -362,6 +370,25 @@ app.get('/api/minerals/csv-template', (req, res) => {
 
 app.get('/api/health', (req, res) => {
     res.json({ ok: true });
+});
+
+app.get('/api/mindat/lookup', (req, res) => {
+    const name = String(req.query.name || '').trim();
+    if (!name) {
+        return res.status(400).json({ error: 'Mineral name is required' });
+    }
+
+    lookupMindatMineral(name)
+        .then((result) => {
+            if (!result) {
+                return res.status(404).json({ error: 'No Mindat mineral page was found for that name' });
+            }
+            res.json(result);
+        })
+        .catch((error) => {
+            console.error('Mindat lookup failed:', error);
+            res.status(502).json({ error: error.message || 'Unable to retrieve mineral data from Mindat' });
+        });
 });
 
 app.post('/api/gemma', (req, res) => {
@@ -677,11 +704,6 @@ function hasRequiredBasicFields(body) {
     return [
         'specimenId',
         'name',
-        'date',
-        'origin',
-        'description',
-        'gpsCoordinates',
-        'observations',
     ].every((field) => String(body[field] || '').trim());
 }
 
@@ -1245,7 +1267,7 @@ function formatFieldAnswer(minerals, answerField) {
 
 function formatRecordSummaryAnswer(minerals) {
     return formatMarkdownTable(
-        ['Specimen ID', 'Name', 'Catalog ID', 'Type', 'Group', 'Subgroup', 'Origin', 'Description', 'Observations', 'Strunz'],
+        ['Specimen ID', 'Name', 'Catalog ID', 'Type', 'Group', 'Subgroup', 'Origin', 'Description', 'Observations', 'Strunz', 'DANA'],
         minerals.map((mineral) => [
             mineral.specimenId || '',
             mineral.name || '',
@@ -1257,6 +1279,7 @@ function formatRecordSummaryAnswer(minerals) {
             mineral.description || '',
             mineral.observations || '',
             mineral.strunz || '',
+            mineral.dana || '',
         ])
     );
 }
@@ -1404,6 +1427,312 @@ function callGemma(prompt, callback) {
     request.end();
 }
 
+async function lookupMindatMineral(name) {
+    if (MINDAT_API_TOKEN) {
+        const apiResult = await lookupMindatMineralApi(name);
+        if (apiResult) {
+            return apiResult;
+        }
+    }
+
+    const searchUrl = `https://www.mindat.org/search.php?search=${encodeURIComponent(name)}`;
+    const searchHtml = await fetchText(searchUrl);
+    if (isCloudflareChallenge(searchHtml)) {
+        throw new Error('Mindat requires browser verification for public page requests. Configure MINDAT_API_TOKEN to use the Mindat API.');
+    }
+
+    const mineralUrl = findMindatMineralUrl(searchHtml, name) || (isMindatMineralPage(searchHtml) ? searchUrl : null);
+
+    if (!mineralUrl) {
+        return null;
+    }
+
+    const pageHtml = mineralUrl === searchUrl ? searchHtml : await fetchText(mineralUrl);
+    if (isCloudflareChallenge(pageHtml)) {
+        throw new Error('Mindat requires browser verification for public page requests. Configure MINDAT_API_TOKEN to use the Mindat API.');
+    }
+
+    const fields = parseMindatFields(pageHtml);
+    return {
+        source: mineralUrl,
+        fields,
+    };
+}
+
+async function lookupMindatMineralApi(name) {
+    const searchUrl = `https://api.mindat.org/geomaterials/?q=${encodeURIComponent(name)}`;
+    const searchBody = await fetchText(searchUrl, 0, {
+        Authorization: `Token ${MINDAT_API_TOKEN}`,
+        Accept: 'application/json',
+    });
+    let parsed;
+    try {
+        parsed = JSON.parse(searchBody);
+    } catch (error) {
+        return null;
+    }
+
+    const records = Array.isArray(parsed) ? parsed : parsed.results;
+    if (!Array.isArray(records) || !records.length) {
+        return null;
+    }
+
+    const normalizedName = normalizeMineralName(name);
+    const record = records.find((item) => normalizeMineralName(item.name) === normalizedName) || records[0];
+    const fields = parseMindatApiFields(record);
+    return {
+        source: record.url || record.mindat_url || `https://www.mindat.org/min-${record.id || record.mindat_id}.html`,
+        fields,
+    };
+}
+
+function fetchText(url, redirectCount = 0, extraHeaders = {}) {
+    return new Promise((resolve, reject) => {
+        if (redirectCount > 5) {
+            reject(new Error('Too many redirects'));
+            return;
+        }
+
+        let parsedUrl;
+        try {
+            parsedUrl = new URL(url);
+        } catch (error) {
+            reject(new Error('Invalid URL'));
+            return;
+        }
+
+        const client = parsedUrl.protocol === 'https:' ? https : http;
+        const request = client.request({
+            hostname: parsedUrl.hostname,
+            port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
+            path: `${parsedUrl.pathname}${parsedUrl.search}`,
+            method: 'GET',
+            headers: {
+                'User-Agent': 'MineralCollectionSite/1.0',
+                Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                ...extraHeaders,
+            },
+            timeout: 20000,
+        }, (response) => {
+            const location = response.headers.location;
+            if ([301, 302, 303, 307, 308].includes(response.statusCode) && location) {
+                const nextUrl = new URL(location, parsedUrl).toString();
+                response.resume();
+                fetchText(nextUrl, redirectCount + 1).then(resolve).catch(reject);
+                return;
+            }
+
+            let body = '';
+            response.setEncoding('utf8');
+            response.on('data', (chunk) => {
+                body += chunk;
+            });
+            response.on('end', () => {
+                if (response.statusCode < 200 || response.statusCode >= 300) {
+                    reject(new Error(`HTTP ${response.statusCode}`));
+                    return;
+                }
+                resolve(body);
+            });
+        });
+
+        request.on('timeout', () => {
+            request.destroy(new Error('Mindat request timed out'));
+        });
+        request.on('error', reject);
+        request.end();
+    });
+}
+
+function isCloudflareChallenge(html) {
+    return /cdn-cgi\/challenge-platform|Enable JavaScript and cookies to continue|Just a moment/i.test(String(html || ''));
+}
+
+function findMindatMineralUrl(html, name) {
+    const links = Array.from(html.matchAll(/href=["']([^"']*\/min-\d+\.html[^"']*)["'][^>]*>([\s\S]{0,160}?)<\/a>/gi))
+        .map((match) => ({
+            href: match[1],
+            text: normalizeMindatText(match[2]),
+        }))
+        .filter((link) => link.href && !/\/photo-|\/loc-/i.test(link.href));
+
+    const normalizedName = normalizeMineralName(name);
+    const exact = links.find((link) => normalizeMineralName(link.text) === normalizedName);
+    const selected = exact || links[0];
+    return selected ? new URL(selected.href, 'https://www.mindat.org').toString() : null;
+}
+
+function isMindatMineralPage(html) {
+    return /Mineral information,\s*data and localities/i.test(html)
+        || /\bMindat ID\b/i.test(html)
+        || /\bCrystal System\b/i.test(html);
+}
+
+function parseMindatFields(html) {
+    const text = htmlToSearchableText(html);
+    const fields = {
+        groupName: normalizeMindatGroup(firstMindatValue(text, ['Chemical Classification', 'Dana Class', 'Strunz Class'])),
+        subgroup: firstMindatValue(text, ['IMA Group', 'Group', 'Mineral Group', 'Subgroup', 'Sub-group']),
+        colour: firstMindatValue(text, ['Colour', 'Color']),
+        streak: firstMindatValue(text, ['Streak']),
+        hardness: firstMindatValue(text, ['Hardness', 'Mohs Hardness', 'Hardness Data']),
+        specificGravity: firstMindatValue(text, ['Specific Gravity', 'Density']),
+        refractiveIndex: firstMindatValue(text, ['Refractive Index', 'RI values']),
+        magnetism: firstMindatValue(text, ['Magnetism', 'Magnetic']),
+        cleavage: firstMindatValue(text, ['Cleavage']),
+        fracture: firstMindatValue(text, ['Fracture']),
+        luster: firstMindatValue(text, ['Luster', 'Lustre']),
+        crystalSystem: firstMindatValue(text, ['Crystal System']),
+        transparency: firstMindatValue(text, ['Transparency', 'Diaphaneity']),
+        uvShortwave: toYesNo(firstMindatValue(text, ['Fluorescence in shortwave UV', 'Shortwave UV', 'SW UV'])),
+        uvLongwave: toYesNo(firstMindatValue(text, ['Fluorescence in longwave UV', 'Longwave UV', 'LW UV'])),
+        phosphorescence: toYesNo(firstMindatValue(text, ['Phosphorescence'])),
+        fluorescenceColour: firstMindatValue(text, ['Fluorescence Colour', 'Fluorescence Color', 'Fluorescence']),
+        chartroyancy: toYesNo(firstMindatValue(text, ['Chatoyancy', 'Chartroyancy'])),
+        iridescence: toYesNo(firstMindatValue(text, ['Iridescence'])),
+        strunz: firstMindatValue(text, ['Strunz', 'Strunz Classification', 'Strunz Class']),
+        dana: firstMindatValue(text, ['Dana', 'Dana Classification', 'Dana Class']),
+    };
+
+    return Object.fromEntries(Object.entries(fields)
+        .map(([field, value]) => [field, cleanMindatValue(value)])
+        .filter(([, value]) => value));
+}
+
+function parseMindatApiFields(record) {
+    const fields = {
+        groupName: normalizeMindatGroup(firstApiValue(record, ['chemical_classification', 'ima_group', 'group', 'classification'])),
+        subgroup: firstApiValue(record, ['subgroup', 'sub_group', 'ima_group', 'mineral_group']),
+        colour: firstApiValue(record, ['colour', 'color']),
+        streak: firstApiValue(record, ['streak']),
+        hardness: firstApiValue(record, ['hardness', 'mohs_hardness']),
+        specificGravity: firstApiValue(record, ['specific_gravity', 'density']),
+        refractiveIndex: firstApiValue(record, ['refractive_index']),
+        magnetism: firstApiValue(record, ['magnetism', 'magnetic']),
+        cleavage: firstApiValue(record, ['cleavage']),
+        fracture: firstApiValue(record, ['fracture']),
+        luster: firstApiValue(record, ['luster', 'lustre']),
+        crystalSystem: firstApiValue(record, ['crystal_system']),
+        transparency: firstApiValue(record, ['transparency', 'diaphaneity']),
+        uvShortwave: toYesNo(firstApiValue(record, ['uv_shortwave', 'shortwave_uv', 'sw_uv', 'fluorescence_shortwave'])),
+        uvLongwave: toYesNo(firstApiValue(record, ['uv_longwave', 'longwave_uv', 'lw_uv', 'fluorescence_longwave'])),
+        phosphorescence: toYesNo(firstApiValue(record, ['phosphorescence'])),
+        fluorescenceColour: firstApiValue(record, ['fluorescence_colour', 'fluorescence_color', 'fluorescence']),
+        chartroyancy: toYesNo(firstApiValue(record, ['chatoyancy', 'chartroyancy'])),
+        iridescence: toYesNo(firstApiValue(record, ['iridescence'])),
+        strunz: firstApiValue(record, ['strunz_classification', 'strunz']),
+        dana: firstApiValue(record, ['dana_classification', 'dana']),
+        description: firstApiValue(record, ['description']),
+    };
+
+    return Object.fromEntries(Object.entries(fields)
+        .map(([field, value]) => [field, cleanMindatValue(value)])
+        .filter(([, value]) => value));
+}
+
+function firstApiValue(record, names) {
+    for (const name of names) {
+        const value = record?.[name];
+        if (value === null || value === undefined || value === '') {
+            continue;
+        }
+        if (Array.isArray(value)) {
+            return value.map((item) => (
+                typeof item === 'object' ? item.name || item.value || JSON.stringify(item) : item
+            )).filter(Boolean).join(', ');
+        }
+        if (typeof value === 'object') {
+            return value.name || value.value || JSON.stringify(value);
+        }
+        return value;
+    }
+    return '';
+}
+
+function htmlToSearchableText(html) {
+    return decodeHtmlEntities(String(html || '')
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<(br|p|div|section|article|tr|li|h[1-6]|dt|dd|table|tbody|thead|ul|ol)\b[^>]*>/gi, '\n')
+        .replace(/<\/(p|div|section|article|tr|li|h[1-6]|dt|dd|table|tbody|thead|ul|ol)>/gi, '\n')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\r/g, '\n')
+        .replace(/[ \t]+/g, ' ')
+        .replace(/\n[ \t]+/g, '\n')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n{2,}/g, '\n'));
+}
+
+function firstMindatValue(text, labels) {
+    for (const label of labels) {
+        const pattern = new RegExp(`(?:^|\\n)\\s*${escapeRegExp(label)}\\s*:?\\s*([^\\n]{1,220})`, 'i');
+        const match = text.match(pattern);
+        if (match && match[1]) {
+            return match[1];
+        }
+    }
+    return '';
+}
+
+function cleanMindatValue(value) {
+    return String(value || '')
+        .replace(/\s+/g, ' ')
+        .replace(/\bHide\b.*$/i, '')
+        .replace(/\bⓘ.*$/i, '')
+        .replace(/^\s*:\s*/, '')
+        .trim();
+}
+
+function toYesNo(value) {
+    const text = String(value || '').trim();
+    if (!text) {
+        return '';
+    }
+
+    if (/\b(no|none|not observed|not reported|absent)\b/i.test(text)) {
+        return 'No';
+    }
+
+    return 'Yes';
+}
+
+function normalizeMindatGroup(value) {
+    const normalized = String(value || '').toLowerCase();
+    const groups = [
+        ['sulfide', 'Sulfides'],
+        ['halide', 'Halides'],
+        ['oxide', 'Oxides'],
+        ['carbonate', 'Carbonates'],
+        ['nitrate', 'Nitrates'],
+        ['borate', 'Borates'],
+        ['sulfate', 'Sulfates'],
+        ['phosphate', 'Phosphates'],
+        ['silicate', 'Silicates'],
+    ];
+    const match = groups.find(([term]) => normalized.includes(term));
+    return match ? match[1] : value;
+}
+
+function normalizeMindatText(value) {
+    return decodeHtmlEntities(String(value || '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+}
+
+function normalizeMineralName(value) {
+    return normalizeMindatText(value).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function decodeHtmlEntities(value) {
+    return String(value || '')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'")
+        .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+        .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)));
+}
+
 function parseMineralCsv(csvText) {
     const text = csvText.replace(/^\uFEFF/, '').trim();
     if (!text) {
@@ -1476,7 +1805,7 @@ function validateCsvRecords(records) {
     const errors = [];
     records.forEach((record, index) => {
         if (!hasRequiredBasicFields(record)) {
-            errors.push(`Row ${index + 2}: missing required Basic Data field`);
+            errors.push(`Row ${index + 2}: missing required specimenId or name`);
         }
 
         const photos = normalizePhotos(record.photos ? safeParsePhotos(record.photos) : [], record.photo);

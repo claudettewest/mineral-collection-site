@@ -1,6 +1,7 @@
 ﻿class MineralForm {
     constructor() {
         this.onSubmitCallback = null;
+        this.onCancelCallback = null;
         this.editingMineral = null;
         this.MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024 * 1024;
         this.TYPE_OPTIONS = [
@@ -28,11 +29,11 @@
                     { name: 'id', label: 'ID', disabled: true },
                     { name: 'specimenId', label: 'Specimen Number', required: true },
                     { name: 'name', label: 'Name', required: true },
-                    { name: 'date', label: 'Date', type: 'date', required: true },
-                    { name: 'origin', label: 'Origin', required: true },
-                    { name: 'description', label: 'Description', multiline: true, required: true },
-                    { name: 'gpsCoordinates', label: 'GPS Coordinates', required: true },
-                    { name: 'observations', label: 'Observations', multiline: true, required: true },
+                    { name: 'date', label: 'Date', type: 'date' },
+                    { name: 'origin', label: 'Origin' },
+                    { name: 'description', label: 'Description', multiline: true },
+                    { name: 'gpsCoordinates', label: 'GPS Coordinates' },
+                    { name: 'observations', label: 'Observations', multiline: true },
                     { name: 'createdAt', label: 'Created At', disabled: true },
                 ],
             },
@@ -49,6 +50,7 @@
                     { name: 'groupName', label: 'Group Name' },
                     { name: 'subgroup', label: 'Subgroup' },
                     { name: 'strunz', label: 'Strunz' },
+                    { name: 'dana', label: 'DANA' },
                 ],
             },
             {
@@ -108,6 +110,7 @@
             'conductivity',
             'observations',
             'strunz',
+            'dana',
         ];
     }
 
@@ -115,7 +118,10 @@
         this.form = document.createElement('form');
         this.form.innerHTML = `
             ${this.FIELD_GROUPS.map((group) => this._renderFieldGroup(group)).join('')}
+            <p class="augment-status" data-role="augment-status"></p>
             <div class="form-buttons">
+                <button type="button" data-role="augment">Augment</button>
+                <button type="button" data-role="update-photos" style="display:none;">Update</button>
                 <button type="submit" data-role="submit">Save</button>
                 <button type="button" data-role="cancel-edit" style="display:none;">Cancel</button>
             </div>
@@ -134,13 +140,24 @@
 
         this.form.addEventListener('submit', (event) => {
             event.preventDefault();
-            this._submitForm();
+            this._submitForm({ returnToList: true });
         });
         this.form.querySelector('input[name="photos"]').addEventListener('change', (event) => {
-            this._validatePhotoSizes(event.target);
+            if (this._validatePhotoSizes(event.target)) {
+                this._updatePhotoUpdateButton();
+            }
         });
         this.form.querySelector('[data-role="cancel-edit"]').addEventListener('click', () => {
             this.clear();
+            if (this.onCancelCallback) {
+                this.onCancelCallback();
+            }
+        });
+        this.form.querySelector('[data-role="augment"]').addEventListener('click', () => {
+            this._augmentFromMindat();
+        });
+        this.form.querySelector('[data-role="update-photos"]').addEventListener('click', () => {
+            this._submitForm({ returnToList: false });
         });
         this._setGeneratedFieldsForNewRecord();
         this._updateGroupControl();
@@ -148,7 +165,7 @@
         return this.form;
     }
 
-    _submitForm() {
+    _submitForm(options = { returnToList: true }) {
         const photoInput = this.form.querySelector('input[name="photos"]');
         const photoFiles = Array.from(photoInput.files);
 
@@ -159,6 +176,7 @@
         const existingPhotos = this.editingMineral ? this._getExistingPhotos(this.editingMineral) : [];
         const photosPromise = photoFiles.length
             ? Promise.all(photoFiles.map((file) => this._readPhoto(file)))
+                .then((newPhotos) => [...existingPhotos, ...newPhotos])
             : Promise.resolve(existingPhotos);
 
         photosPromise
@@ -179,7 +197,7 @@
                 };
 
                 if (this.onSubmitCallback) {
-                    this.onSubmitCallback(mineralData);
+                    this.onSubmitCallback(mineralData, options);
                 }
             })
             .catch((error) => {
@@ -218,6 +236,10 @@
         this.onSubmitCallback = callback;
     }
 
+    onCancel(callback) {
+        this.onCancelCallback = callback;
+    }
+
     edit(mineral) {
         this.editingMineral = mineral;
         this.form.querySelector('input[name="id"]').value = this._formatId(mineral.id);
@@ -235,7 +257,8 @@
         this.form.querySelector('input[name="createdAt"]').value = mineral.createdAt || '';
         this.form.querySelector('input[name="photos"]').required = false;
         this._resetSectionState();
-        this.form.querySelector('[data-role="submit"]').textContent = 'Update';
+        this.form.querySelector('[data-role="submit"]').textContent = 'Save';
+        this.form.querySelector('[data-role="update-photos"]').style.display = 'none';
         this.form.querySelector('[data-role="cancel-edit"]').style.display = '';
     }
 
@@ -245,11 +268,20 @@
             this.editingMineral = null;
             this._setGeneratedFieldsForNewRecord();
             this._updateGroupControl();
+            this._setAugmentStatus('');
             this.form.querySelector('input[name="photos"]').required = false;
             this._resetSectionState();
             this.form.querySelector('[data-role="submit"]').textContent = 'Save';
+            this.form.querySelector('[data-role="update-photos"]').style.display = 'none';
             this.form.querySelector('[data-role="cancel-edit"]').style.display = 'none';
         }
+    }
+
+    markSaved(mineral) {
+        this.editingMineral = mineral;
+        this.form.querySelector('input[name="photos"]').value = '';
+        this.form.querySelector('[data-role="update-photos"]').style.display = 'none';
+        this.form.querySelector('[data-role="submit"]').textContent = 'Save';
     }
 
     _getExistingPhotos(mineral) {
@@ -325,6 +357,68 @@
             values[fieldName] = this.form.querySelector(`[name="${fieldName}"]`).value;
             return values;
         }, {});
+    }
+
+    _updatePhotoUpdateButton() {
+        const photoInput = this.form.querySelector('input[name="photos"]');
+        const updateButton = this.form.querySelector('[data-role="update-photos"]');
+        updateButton.style.display = this.editingMineral && photoInput.files.length ? '' : 'none';
+    }
+
+    _augmentFromMindat() {
+        const name = this.form.querySelector('input[name="name"]').value.trim();
+        const button = this.form.querySelector('[data-role="augment"]');
+        if (!name) {
+            this._setAugmentStatus('Enter a specimen name before using Augment.', true);
+            return;
+        }
+
+        button.disabled = true;
+        this._setAugmentStatus('Looking up mineral data...');
+        fetch(`/api/mindat/lookup?name=${encodeURIComponent(name)}`)
+            .then((response) => response.json().then((data) => ({ response, data })))
+            .then(({ response, data }) => {
+                if (!response.ok) {
+                    throw new Error(data.error || 'Unable to look up mineral data');
+                }
+
+                this._applyAugmentFields(data.fields || {});
+                const fieldCount = Object.values(data.fields || {}).filter((value) => String(value || '').trim()).length;
+                this._setAugmentStatus(fieldCount
+                    ? `Filled ${fieldCount} field(s) from Mindat.`
+                    : 'Mindat was found, but no matching fields were available.');
+            })
+            .catch((error) => {
+                this._setAugmentStatus(error.message, true);
+            })
+            .finally(() => {
+                button.disabled = false;
+            });
+    }
+
+    _applyAugmentFields(fields) {
+        Object.entries(fields).forEach(([fieldName, value]) => {
+            const trimmedValue = String(value || '').trim();
+            if (!trimmedValue) {
+                return;
+            }
+
+            if (fieldName === 'groupName') {
+                this._updateGroupControl(trimmedValue);
+                return;
+            }
+
+            const control = this.form.querySelector(`[name="${fieldName}"]`);
+            if (control) {
+                control.value = trimmedValue;
+            }
+        });
+    }
+
+    _setAugmentStatus(message, isError = false) {
+        const status = this.form.querySelector('[data-role="augment-status"]');
+        status.textContent = message;
+        status.classList.toggle('error', isError);
     }
 
     _resetSectionState() {
