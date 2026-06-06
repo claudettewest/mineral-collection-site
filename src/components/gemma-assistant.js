@@ -118,9 +118,15 @@ class GemmaAssistant {
     _postQuestion(url, prompt, timeoutMs) {
         return this._fetchWithTimeout(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: this._authHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({ prompt }),
         }, timeoutMs).then((response) => this._readJsonResponse(response));
+    }
+
+    _authHeaders(extraHeaders = {}) {
+        return typeof window.getMineralAuthHeaders === 'function'
+            ? window.getMineralAuthHeaders(extraHeaders)
+            : extraHeaders;
     }
 
     _fetchWithTimeout(url, options, timeoutMs) {

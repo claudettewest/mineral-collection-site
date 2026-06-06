@@ -25,6 +25,7 @@ while ($true) {
     Add-Content -Path $LogFile -Value "[$(Get-Date -Format o)] Starting mineral collection server on port 3011"
     Push-Location $ProjectRoot
     try {
+        $env:MINDAT_API_TOKEN = "ea433667cdf1ff014ecb0764a20426b7"
         & node server.js *>> $LogFile
     } catch {
         Add-Content -Path $LogFile -Value "[$(Get-Date -Format o)] Server process failed: $($_.Exception.Message)"

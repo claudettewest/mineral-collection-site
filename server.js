@@ -5,9 +5,10 @@ const path = require('path');
 const multer = require('multer');
 const http = require('http');
 const https = require('https');
+const crypto = require('crypto');
 
 const app = express();
-const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024 * 1024;
+const MAX_PHOTO_SIZE_BYTES = 50 * 1024 * 1024;
 const GEMMA_MODEL = process.env.GEMMA_MODEL || 'gemma3:1b';
 const GEMMA_API_URL = process.env.GEMMA_API_URL || 'http://localhost:11434/api/generate';
 const MINDAT_API_TOKEN = process.env.MINDAT_API_TOKEN || '';
@@ -19,6 +20,7 @@ const MINERAL_SELECT_FIELDS = [
     'id',
     'specimenId',
     'name',
+    'variety',
     'type',
     'groupName',
     'subgroup',
@@ -54,6 +56,7 @@ const MINERAL_SELECT_FIELDS = [
 const MINERAL_SEARCH_FIELDS = [
     'specimenId',
     'name',
+    'variety',
     'type',
     'groupName',
     'subgroup',
@@ -89,6 +92,7 @@ const MINERAL_SEARCH_FIELDS = [
 const FIELD_ALIASES = [
     { field: 'specimenId', label: 'specimen ID', terms: ['specimen id', 'specimen ids', 'catalog number', 'catalog numbers'] },
     { field: 'name', label: 'name', terms: ['name', 'names', 'mineral name', 'mineral names'] },
+    { field: 'variety', label: 'variety', terms: ['variety', 'varieties'] },
     { field: 'type', label: 'type', terms: ['type', 'types'] },
     { field: 'groupName', label: 'group', terms: ['group', 'groups', 'group name', 'group names'] },
     { field: 'subgroup', label: 'subgroup', terms: ['subgroup', 'subgroups', 'sub group', 'sub groups'] },
@@ -192,7 +196,9 @@ const QUERY_STOPWORDS = new Set([
     'you',
 ]);
 const CATALOG_REFUSAL = 'The catalog does not contain enough information to answer that.';
+const OWNER_EMAIL = 'claudette.west@gmail.com';
 const EXTRA_MINERAL_FIELDS = [
+    'variety',
     'gpsCoordinates',
     'colour',
     'streak',
@@ -222,6 +228,7 @@ const EXTRA_MINERAL_FIELDS = [
 const IMPORTABLE_FIELDS = [
     'specimenId',
     'name',
+    'variety',
     'date',
     'origin',
     'description',
@@ -270,6 +277,7 @@ db.serialize(() => {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             specimenId TEXT,
             name TEXT,
+            variety TEXT,
             type TEXT,
             groupName TEXT,
             subgroup TEXT,
@@ -303,23 +311,40 @@ db.serialize(() => {
             observations TEXT,
             strunz TEXT,
             dana TEXT,
+            ownerEmail TEXT,
             createdAt TEXT
         )
     `);
-    ['photos', ...EXTRA_MINERAL_FIELDS].forEach((field) => {
+    db.run(`
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            fullName TEXT NOT NULL,
+            receiveEmails INTEGER NOT NULL DEFAULT 0,
+            passwordHash TEXT NOT NULL,
+            passwordSalt TEXT NOT NULL,
+            userType TEXT NOT NULL DEFAULT 'collector',
+            createdAt TEXT NOT NULL
+        )
+    `);
+    ['photos', ...EXTRA_MINERAL_FIELDS, 'ownerEmail'].forEach((field) => {
         db.run(`ALTER TABLE minerals ADD COLUMN ${field} TEXT`, (error) => {
             if (error && !/duplicate column name/i.test(error.message)) {
                 console.error(`Error adding ${field} column:`, error);
             }
         });
     });
+    db.run(
+        "UPDATE minerals SET ownerEmail = ? WHERE ownerEmail IS NULL OR TRIM(ownerEmail) = ''",
+        [OWNER_EMAIL]
+    );
 });
 
 app.use(bodyParser.json({ limit: '20mb' }));
 app.use('/api', (req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,X-User-Email');
     if (req.method === 'OPTIONS') {
         res.status(204).send();
         return;
@@ -329,16 +354,107 @@ app.use('/api', (req, res, next) => {
 app.get('/diamond.ico', (req, res) => {
     res.sendFile(path.join(__dirname, 'diamond.ico'));
 });
+app.get('/no_photo.png', (req, res) => {
+    res.sendFile(path.join(__dirname, 'no_photo.png'));
+});
+app.get('/geo_icon.png', (req, res) => {
+    res.sendFile(path.join(__dirname, 'geo_icon.png'));
+});
 app.use('/maps', express.static(path.join(__dirname, 'maps')));
 app.use(express.static(path.join(__dirname, 'src')));
 
+app.post('/api/register', (req, res) => {
+    const email = normalizeEmail(req.body.email);
+    const fullName = String(req.body.fullName || '').trim();
+    const receiveEmails = req.body.receiveEmails ? 1 : 0;
+    const password = String(req.body.password || '');
+    const confirmPassword = String(req.body.confirmPassword || '');
+
+    if (!fullName || !email || !password || !confirmPassword) {
+        return res.status(400).json({ error: 'Full name, email, password, and confirm password are required' });
+    }
+
+    if (!isValidEmail(email)) {
+        return res.status(400).json({ error: 'Enter a valid email address' });
+    }
+
+    if (password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    if (password !== confirmPassword) {
+        return res.status(400).json({ error: 'Passwords do not match' });
+    }
+
+    const passwordRecord = hashPassword(password);
+    const userType = getUserType(email);
+    const createdAt = new Date().toISOString();
+
+    db.run(`
+        INSERT INTO users (email, fullName, receiveEmails, passwordHash, passwordSalt, userType, createdAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [
+        email,
+        fullName,
+        receiveEmails,
+        passwordRecord.hash,
+        passwordRecord.salt,
+        userType,
+        createdAt,
+    ], function onUserSaved(error) {
+        if (error) {
+            if (/UNIQUE constraint failed/i.test(error.message)) {
+                return res.status(409).json({ error: 'That email address is already registered' });
+            }
+            console.error('Error registering user:', error);
+            return res.status(500).json({ error: 'Database error' });
+        }
+
+        res.status(201).json(toPublicUser({
+            id: this.lastID,
+            email,
+            fullName,
+            receiveEmails,
+            userType,
+            createdAt,
+        }));
+    });
+});
+
+app.post('/api/login', (req, res) => {
+    const email = normalizeEmail(req.body.email);
+    const password = String(req.body.password || '');
+
+    if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    db.get('SELECT * FROM users WHERE email = ?', [email], (error, user) => {
+        if (error) {
+            console.error('Error loading user:', error);
+            return res.status(500).json({ error: 'Database error' });
+        }
+
+        if (!user || !verifyPassword(password, user.passwordSalt, user.passwordHash)) {
+            return res.status(401).json({ error: 'Invalid email or password' });
+        }
+
+        res.json(toPublicUser(user));
+    });
+});
+
 app.get('/api/minerals', (req, res) => {
-    db.all('SELECT * FROM minerals ORDER BY id DESC', (error, rows) => {
+    const ownerEmail = getRequestUserEmail(req);
+    if (!ownerEmail) {
+        return res.json([]);
+    }
+
+    db.all('SELECT * FROM minerals WHERE ownerEmail = ? ORDER BY id DESC', [ownerEmail], (error, rows) => {
         if (error) {
             console.error('Error fetching minerals:', error);
             return res.status(500).json({ error: 'Database error' });
         }
-        res.json(rows);
+        res.json(rows.map(toMineralListRow));
     });
 });
 
@@ -368,6 +484,43 @@ app.get('/api/minerals/csv-template', (req, res) => {
     res.send(`${IMPORTABLE_FIELDS.join(',')}\n`);
 });
 
+app.get('/api/minerals/latest', (req, res) => {
+    const ownerEmail = getRequestUserEmail(req);
+    if (!ownerEmail) {
+        return res.json([]);
+    }
+
+    const limit = Math.max(1, Math.min(10, Number(req.query.limit || 5)));
+    db.all('SELECT * FROM minerals WHERE ownerEmail = ? ORDER BY id DESC LIMIT ?', [ownerEmail, limit], (error, rows) => {
+        if (error) {
+            console.error('Error fetching latest minerals:', error);
+            return res.status(500).json({ error: 'Database error' });
+        }
+
+        res.json(rows);
+    });
+});
+
+app.get('/api/minerals/:id', (req, res) => {
+    const ownerEmail = getRequestUserEmail(req);
+    if (!ownerEmail) {
+        return res.status(401).json({ error: 'Login is required' });
+    }
+
+    db.get('SELECT * FROM minerals WHERE id = ? AND ownerEmail = ?', [req.params.id, ownerEmail], (error, row) => {
+        if (error) {
+            console.error('Error fetching mineral:', error);
+            return res.status(500).json({ error: 'Database error' });
+        }
+
+        if (!row) {
+            return res.status(404).json({ error: 'Mineral not found' });
+        }
+
+        res.json(row);
+    });
+});
+
 app.get('/api/health', (req, res) => {
     res.json({ ok: true });
 });
@@ -392,6 +545,14 @@ app.get('/api/mindat/lookup', (req, res) => {
 });
 
 app.post('/api/gemma', (req, res) => {
+    const ownerEmail = getRequestUserEmail(req);
+    if (!ownerEmail) {
+        return res.json({
+            answer: 'Login/register to start adding your collection',
+            model: 'Catalog',
+        });
+    }
+
     const prompt = String(req.body.prompt || '').trim();
     if (!prompt) {
         return res.status(400).json({ error: 'Prompt is required' });
@@ -399,7 +560,8 @@ app.post('/api/gemma', (req, res) => {
 
     const summaryQuery = getSummaryQuery(prompt);
     if (summaryQuery) {
-        db.all(summaryQuery.sql, summaryQuery.params, (error, rows) => {
+        const query = addOwnerScopeToQuery(summaryQuery, ownerEmail);
+        db.all(query.sql, query.params, (error, rows) => {
             if (error) {
                 console.error('Error answering summary question:', error);
                 return res.status(500).json({ error: 'Database error' });
@@ -415,7 +577,8 @@ app.post('/api/gemma', (req, res) => {
 
     const countQuery = getCountQuery(prompt);
     if (countQuery) {
-        db.get(countQuery.sql, countQuery.params, (error, row) => {
+        const query = addOwnerScopeToQuery(countQuery, ownerEmail);
+        db.get(query.sql, query.params, (error, row) => {
             if (error) {
                 console.error('Error answering count question:', error);
                 return res.status(500).json({ error: 'Database error' });
@@ -431,7 +594,8 @@ app.post('/api/gemma', (req, res) => {
 
     const catalogCountQuery = getCatalogCountQuery(prompt);
     if (catalogCountQuery) {
-        db.get(catalogCountQuery.sql, catalogCountQuery.params, (error, row) => {
+        const query = addOwnerScopeToQuery(catalogCountQuery, ownerEmail);
+        db.get(query.sql, query.params, (error, row) => {
             if (error) {
                 console.error('Error answering catalog count question:', error);
                 return res.status(500).json({ error: 'Database error' });
@@ -446,7 +610,7 @@ app.post('/api/gemma', (req, res) => {
     }
 
     const catalogQuery = buildCatalogQuery(prompt);
-    runCatalogQuery(catalogQuery, (queryError, minerals) => {
+    runCatalogQuery(catalogQuery, ownerEmail, (queryError, minerals) => {
         if (queryError) {
             console.error('Error querying mineral catalog:', queryError);
             return res.status(500).json({ error: 'Database error' });
@@ -493,6 +657,11 @@ app.post('/api/gemma', (req, res) => {
 });
 
 app.post('/api/minerals/upload-csv', upload.single('csv'), (req, res) => {
+    const ownerEmail = getRequestUserEmail(req);
+    if (!ownerEmail) {
+        return res.status(401).json({ error: 'Login is required before uploading specimens' });
+    }
+
     if (!req.file) {
         return res.status(400).json({ error: 'CSV file is required' });
     }
@@ -516,7 +685,7 @@ app.post('/api/minerals/upload-csv', upload.single('csv'), (req, res) => {
         });
     }
 
-    insertCsvRecords(records, (error, addedCount) => {
+    insertCsvRecords(records, ownerEmail, (error, addedCount) => {
         if (error) {
             console.error('Error importing CSV:', error);
             return res.status(500).json({ error: 'Database error' });
@@ -527,30 +696,27 @@ app.post('/api/minerals/upload-csv', upload.single('csv'), (req, res) => {
 });
 
 app.delete('/api/minerals', (req, res) => {
-    db.serialize(() => {
-        db.run('DELETE FROM minerals', (deleteError) => {
-            if (deleteError) {
-                console.error('Error deleting all minerals:', deleteError);
-                return res.status(500).json({ error: 'Database error' });
-            }
+    const ownerEmail = getRequestUserEmail(req);
+    if (!ownerEmail) {
+        return res.status(401).json({ error: 'Login is required' });
+    }
 
-            db.run("DELETE FROM sqlite_sequence WHERE name = 'minerals'", (sequenceError) => {
-                if (sequenceError) {
-                    console.error('Error resetting mineral ID sequence:', sequenceError);
-                    return res.status(500).json({ error: 'Database error' });
-                }
+    db.run('DELETE FROM minerals WHERE ownerEmail = ?', [ownerEmail], (deleteError) => {
+        if (deleteError) {
+            console.error('Error deleting minerals:', deleteError);
+            return res.status(500).json({ error: 'Database error' });
+        }
 
-                res.json({
-                    deleted: true,
-                    nextId: 1,
-                    formattedId: formatDisplayId(1),
-                });
-            });
-        });
+        res.json({ deleted: true });
     });
 });
 
 app.post('/api/minerals', (req, res) => {
+    const ownerEmail = getRequestUserEmail(req);
+    if (!ownerEmail) {
+        return res.status(401).json({ error: 'Login is required before adding specimens' });
+    }
+
     const { specimenId, name, type, subgroup, date, origin, description, photo } = req.body;
     const group = req.body.groupName || req.body.group;
     const photos = normalizePhotos(req.body.photos, photo);
@@ -559,9 +725,9 @@ app.post('/api/minerals', (req, res) => {
         return res.status(400).json({ error: 'Missing required mineral fields' });
     }
 
-    const oversizedPhoto = photos.find((item) => item.size > MAX_PHOTO_SIZE_BYTES);
+    const oversizedPhoto = photos.find((item) => getStoredPhotoSize(item) > MAX_PHOTO_SIZE_BYTES);
     if (oversizedPhoto) {
-        return res.status(400).json({ error: `${oversizedPhoto.name || 'Photo'} exceeds the 5 GB limit` });
+        return res.status(400).json({ error: `${oversizedPhoto.originalName || oversizedPhoto.name || 'Photo'} exceeds the 50 MB limit` });
     }
 
     const createdAt = new Date().toISOString();
@@ -569,8 +735,8 @@ app.post('/api/minerals', (req, res) => {
     const sql = `
         INSERT INTO minerals (
             specimenId, name, type, groupName, subgroup, date, origin, description, photo, photos,
-            ${EXTRA_MINERAL_FIELDS.join(', ')}, createdAt
-        ) VALUES (${Array.from({ length: 11 + EXTRA_MINERAL_FIELDS.length }, () => '?').join(', ')})
+            ${EXTRA_MINERAL_FIELDS.join(', ')}, ownerEmail, createdAt
+        ) VALUES (${Array.from({ length: 12 + EXTRA_MINERAL_FIELDS.length }, () => '?').join(', ')})
     `;
 
     db.run(sql, [
@@ -585,6 +751,7 @@ app.post('/api/minerals', (req, res) => {
         photos[0]?.dataUrl || '',
         JSON.stringify(photos),
         ...extraValues,
+        ownerEmail,
         createdAt,
     ], function (error) {
         if (error) {
@@ -592,7 +759,7 @@ app.post('/api/minerals', (req, res) => {
             return res.status(500).json({ error: 'Database error' });
         }
 
-        db.get('SELECT * FROM minerals WHERE id = ?', [this.lastID], (err, row) => {
+        db.get('SELECT * FROM minerals WHERE id = ? AND ownerEmail = ?', [this.lastID, ownerEmail], (err, row) => {
             if (err) {
                 console.error('Error fetching saved mineral:', err);
                 return res.status(500).json({ error: 'Database error' });
@@ -603,6 +770,11 @@ app.post('/api/minerals', (req, res) => {
 });
 
 app.put('/api/minerals/:id', (req, res) => {
+    const ownerEmail = getRequestUserEmail(req);
+    if (!ownerEmail) {
+        return res.status(401).json({ error: 'Login is required' });
+    }
+
     const { specimenId, name, type, subgroup, date, origin, description, photo } = req.body;
     const group = req.body.groupName || req.body.group;
     const photos = normalizePhotos(req.body.photos, photo);
@@ -611,9 +783,9 @@ app.put('/api/minerals/:id', (req, res) => {
         return res.status(400).json({ error: 'Missing required mineral fields' });
     }
 
-    const oversizedPhoto = photos.find((item) => item.size > MAX_PHOTO_SIZE_BYTES);
+    const oversizedPhoto = photos.find((item) => getStoredPhotoSize(item) > MAX_PHOTO_SIZE_BYTES);
     if (oversizedPhoto) {
-        return res.status(400).json({ error: `${oversizedPhoto.name || 'Photo'} exceeds the 5 GB limit` });
+        return res.status(400).json({ error: `${oversizedPhoto.originalName || oversizedPhoto.name || 'Photo'} exceeds the 50 MB limit` });
     }
 
     const extraValues = getExtraMineralValues(req.body);
@@ -630,7 +802,7 @@ app.put('/api/minerals/:id', (req, res) => {
             photo = ?,
             photos = ?,
             ${EXTRA_MINERAL_FIELDS.map((field) => `${field} = ?`).join(',\n            ')}
-        WHERE id = ?
+        WHERE id = ? AND ownerEmail = ?
     `;
 
     db.run(sql, [
@@ -646,6 +818,7 @@ app.put('/api/minerals/:id', (req, res) => {
         JSON.stringify(photos),
         ...extraValues,
         req.params.id,
+        ownerEmail,
     ], function (error) {
         if (error) {
             console.error('Error updating mineral:', error);
@@ -656,7 +829,7 @@ app.put('/api/minerals/:id', (req, res) => {
             return res.status(404).json({ error: 'Mineral not found' });
         }
 
-        db.get('SELECT * FROM minerals WHERE id = ?', [req.params.id], (err, row) => {
+        db.get('SELECT * FROM minerals WHERE id = ? AND ownerEmail = ?', [req.params.id, ownerEmail], (err, row) => {
             if (err) {
                 console.error('Error fetching updated mineral:', err);
                 return res.status(500).json({ error: 'Database error' });
@@ -667,7 +840,12 @@ app.put('/api/minerals/:id', (req, res) => {
 });
 
 app.delete('/api/minerals/:id', (req, res) => {
-    db.run('DELETE FROM minerals WHERE id = ?', [req.params.id], function (error) {
+    const ownerEmail = getRequestUserEmail(req);
+    if (!ownerEmail) {
+        return res.status(401).json({ error: 'Login is required' });
+    }
+
+    db.run('DELETE FROM minerals WHERE id = ? AND ownerEmail = ?', [req.params.id, ownerEmail], function (error) {
         if (error) {
             console.error('Error deleting mineral:', error);
             return res.status(500).json({ error: 'Database error' });
@@ -684,16 +862,87 @@ app.delete('/api/minerals/:id', (req, res) => {
 function normalizePhotos(photos, fallbackPhoto) {
     if (Array.isArray(photos)) {
         return photos
-            .map((item) => ({
-                dataUrl: typeof item === 'string' ? item : item.dataUrl,
-                name: typeof item === 'string' ? '' : item.name || '',
-                size: typeof item === 'string' ? 0 : Number(item.size || 0),
-                type: typeof item === 'string' ? '' : item.type || '',
-            }))
-            .filter((item) => item.dataUrl);
+            .map((item) => {
+                if (typeof item === 'string') {
+                    return {
+                        dataUrl: item,
+                        name: '',
+                        size: 0,
+                        type: '',
+                    };
+                }
+                return {
+                    mainWebp: item.mainWebp || '',
+                    thumbWebp: item.thumbWebp || '',
+                    mainName: item.mainName || 'main.webp',
+                    thumbName: item.thumbName || 'thumb.webp',
+                    originalName: item.originalName || item.name || '',
+                    mainSize: Number(item.mainSize || 0),
+                    thumbSize: Number(item.thumbSize || 0),
+                    dataUrl: item.dataUrl || '',
+                    name: item.name || '',
+                    size: Number(item.size || 0),
+                    type: item.type || 'image/webp',
+                };
+            })
+            .filter((item) => item.mainWebp || item.thumbWebp || item.dataUrl);
     }
 
     return fallbackPhoto ? [{ dataUrl: fallbackPhoto, name: '', size: 0, type: '' }] : [];
+}
+
+function getStoredPhotoSize(photo) {
+    return Number(photo.mainSize || 0) + Number(photo.thumbSize || 0) || Number(photo.size || 0);
+}
+
+function toMineralListRow(row) {
+    const photos = normalizePhotos(row.photos ? safeParsePhotos(row.photos) : [], row.photo);
+    const { photo, photos: rawPhotos, ...listRow } = row;
+    return {
+        ...listRow,
+        photoCount: photos.length,
+    };
+}
+
+function normalizeEmail(value) {
+    return String(value || '').trim().toLowerCase();
+}
+
+function getRequestUserEmail(req) {
+    return normalizeEmail(req.get('X-User-Email'));
+}
+
+function isValidEmail(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function getUserType(email) {
+    return normalizeEmail(email) === OWNER_EMAIL ? 'admin' : 'collector';
+}
+
+function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
+    return {
+        salt,
+        hash: crypto.pbkdf2Sync(password, salt, 120000, 64, 'sha512').toString('hex'),
+    };
+}
+
+function verifyPassword(password, salt, expectedHash) {
+    const actualHash = hashPassword(password, salt).hash;
+    const actual = Buffer.from(actualHash, 'hex');
+    const expected = Buffer.from(String(expectedHash || ''), 'hex');
+    return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
+
+function toPublicUser(user) {
+    return {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        receiveEmails: Boolean(user.receiveEmails),
+        userType: getUserType(user.email),
+        createdAt: user.createdAt,
+    };
 }
 
 function getExtraMineralValues(body) {
@@ -992,37 +1241,70 @@ function getSearchFieldsForQuery(answerField) {
         : ['specimenId', 'name'];
 }
 
-function runCatalogQuery(catalogQuery, callback) {
+function runCatalogQuery(catalogQuery, ownerEmail, callback) {
     if ((catalogQuery.listRecords || catalogQuery.existenceQuestion || catalogQuery.describeRecords) && catalogQuery.searchTerms.length) {
-        const identityQuery = buildSearchCatalogSql(catalogQuery, ['specimenId', 'name']);
+        const identityQuery = addOwnerScopeToQuery(buildSearchCatalogSql(catalogQuery, ['specimenId', 'name']), ownerEmail);
         db.all(identityQuery.sql, identityQuery.params, (identityError, identityRows) => {
             if (identityError || identityRows.length) {
                 callback(identityError, identityRows);
                 return;
             }
 
-            const query = buildCatalogSql(catalogQuery, false);
+            const query = addOwnerScopeToQuery(buildCatalogSql(catalogQuery, false), ownerEmail);
             db.all(query.sql, query.params, callback);
         });
         return;
     }
 
     if (catalogQuery.answerField && catalogQuery.searchTerms.length === 1) {
-        const exactQuery = buildCatalogSql(catalogQuery, true);
+        const exactQuery = addOwnerScopeToQuery(buildCatalogSql(catalogQuery, true), ownerEmail);
         db.all(exactQuery.sql, exactQuery.params, (exactError, exactRows) => {
             if (exactError || exactRows.length) {
                 callback(exactError, exactRows);
                 return;
             }
 
-            const fallbackQuery = buildCatalogSql(catalogQuery, false);
+            const fallbackQuery = addOwnerScopeToQuery(buildCatalogSql(catalogQuery, false), ownerEmail);
             db.all(fallbackQuery.sql, fallbackQuery.params, callback);
         });
         return;
     }
 
-    const query = buildCatalogSql(catalogQuery, false);
+    const query = addOwnerScopeToQuery(buildCatalogSql(catalogQuery, false), ownerEmail);
     db.all(query.sql, query.params, callback);
+}
+
+function addOwnerScopeToQuery(query, ownerEmail) {
+    const params = [ownerEmail, ...(query.params || [])];
+    if (/\bWHERE\b/i.test(query.sql)) {
+        return {
+            ...query,
+            params,
+            sql: query.sql.replace(/\bWHERE\b/i, 'WHERE ownerEmail = ? AND'),
+        };
+    }
+
+    if (/\bGROUP BY\b/i.test(query.sql)) {
+        return {
+            ...query,
+            params,
+            sql: query.sql.replace(/\bGROUP BY\b/i, 'WHERE ownerEmail = ?\n            GROUP BY'),
+        };
+    }
+
+    if (/\bORDER BY\b/i.test(query.sql)) {
+        return {
+            ...query,
+            params,
+            sql: query.sql.replace(/\bORDER BY\b/i, 'WHERE ownerEmail = ?\n        ORDER BY'),
+        };
+    }
+
+    return {
+        ...query,
+        params,
+        sql: `${query.sql}\nWHERE ownerEmail = ?`,
+    };
 }
 
 function buildSearchCatalogSql(catalogQuery, searchFields) {
@@ -1429,10 +1711,7 @@ function callGemma(prompt, callback) {
 
 async function lookupMindatMineral(name) {
     if (MINDAT_API_TOKEN) {
-        const apiResult = await lookupMindatMineralApi(name);
-        if (apiResult) {
-            return apiResult;
-        }
+        return lookupMindatMineralApi(name);
     }
 
     const searchUrl = `https://www.mindat.org/search.php?search=${encodeURIComponent(name)}`;
@@ -1460,7 +1739,62 @@ async function lookupMindatMineral(name) {
 }
 
 async function lookupMindatMineralApi(name) {
-    const searchUrl = `https://api.mindat.org/geomaterials/?q=${encodeURIComponent(name)}`;
+    const mindatFields = [
+        'id',
+        'name',
+        'description_short',
+        'description',
+        'entrytype_text',
+        'varietyof',
+        'groupid',
+        'diapheny',
+        'cleavage',
+        'cleavagetype',
+        'colour',
+        'streak',
+        'hmin',
+        'hmax',
+        'hardtype',
+        'csystem',
+        'cclass',
+        'dmeas',
+        'dmeas2',
+        'dcalc',
+        'fracturetype',
+        'lustre',
+        'lustretype',
+        'uv',
+        'magnetism',
+        'strunz10ed1',
+        'strunz10ed2',
+        'strunz10ed3',
+        'strunz10ed4',
+        'dana8ed1',
+        'dana8ed2',
+        'dana8ed3',
+        'dana8ed4',
+        'rimin',
+        'rimax',
+        'opticaln',
+        'opticalomega',
+        'opticalepsilon',
+        'opticalalpha',
+        'opticalbeta',
+        'opticalgamma',
+        'commentcolor',
+        'commenthard',
+        'commentluster',
+        'commentbreak',
+        'commentdense',
+        'commentcrystal',
+    ].join(',');
+    const params = new URLSearchParams({
+        name,
+        fields: mindatFields,
+        'page-size': '10',
+        format: 'json',
+    });
+    const searchUrl = `https://api.mindat.org/v1/geomaterials/?${params.toString()}`;
     const searchBody = await fetchText(searchUrl, 0, {
         Authorization: `Token ${MINDAT_API_TOKEN}`,
         Accept: 'application/json',
@@ -1600,29 +1934,55 @@ function parseMindatFields(html) {
 }
 
 function parseMindatApiFields(record) {
+    const hardness = formatMindatRange(record, ['hmin'], ['hmax'])
+        || firstApiValue(record, ['hardness', 'mohs_hardness', 'hardtype']);
+    const specificGravity = formatMindatRange(record, ['dmeas'], ['dmeas2'])
+        || firstNonZeroApiValue(record, ['dcalc', 'specific_gravity', 'density']);
+    const refractiveIndex = formatMindatRange(record, ['rimin'], ['rimax'])
+        || firstNonZeroApiValue(record, [
+            'refractive_index',
+            'opticaln',
+            'opticalomega',
+            'opticalepsilon',
+            'opticalalpha',
+            'opticalbeta',
+            'opticalgamma',
+        ]);
+    const strunz = formatMindatCode([
+        firstApiValue(record, ['strunz10ed1']),
+        firstApiValue(record, ['strunz10ed2']),
+        firstApiValue(record, ['strunz10ed3']),
+        firstApiValue(record, ['strunz10ed4']),
+    ]);
+    const dana = formatMindatCode([
+        firstApiValue(record, ['dana8ed1']),
+        firstApiValue(record, ['dana8ed2']),
+        firstApiValue(record, ['dana8ed3']),
+        firstApiValue(record, ['dana8ed4']),
+    ]);
     const fields = {
         groupName: normalizeMindatGroup(firstApiValue(record, ['chemical_classification', 'ima_group', 'group', 'classification'])),
         subgroup: firstApiValue(record, ['subgroup', 'sub_group', 'ima_group', 'mineral_group']),
-        colour: firstApiValue(record, ['colour', 'color']),
+        colour: firstApiValue(record, ['colour', 'color', 'commentcolor']),
         streak: firstApiValue(record, ['streak']),
-        hardness: firstApiValue(record, ['hardness', 'mohs_hardness']),
-        specificGravity: firstApiValue(record, ['specific_gravity', 'density']),
-        refractiveIndex: firstApiValue(record, ['refractive_index']),
+        hardness,
+        specificGravity,
+        refractiveIndex,
         magnetism: firstApiValue(record, ['magnetism', 'magnetic']),
-        cleavage: firstApiValue(record, ['cleavage']),
-        fracture: firstApiValue(record, ['fracture']),
-        luster: firstApiValue(record, ['luster', 'lustre']),
-        crystalSystem: firstApiValue(record, ['crystal_system']),
-        transparency: firstApiValue(record, ['transparency', 'diaphaneity']),
-        uvShortwave: toYesNo(firstApiValue(record, ['uv_shortwave', 'shortwave_uv', 'sw_uv', 'fluorescence_shortwave'])),
-        uvLongwave: toYesNo(firstApiValue(record, ['uv_longwave', 'longwave_uv', 'lw_uv', 'fluorescence_longwave'])),
-        phosphorescence: toYesNo(firstApiValue(record, ['phosphorescence'])),
-        fluorescenceColour: firstApiValue(record, ['fluorescence_colour', 'fluorescence_color', 'fluorescence']),
+        cleavage: firstApiValue(record, ['cleavagetype', 'cleavage']),
+        fracture: firstApiValue(record, ['fracturetype', 'fracture']),
+        luster: firstApiValue(record, ['lustretype', 'lustre', 'luster', 'commentluster']),
+        crystalSystem: firstApiValue(record, ['csystem', 'crystal_system']),
+        transparency: firstApiValue(record, ['diapheny', 'transparency', 'diaphaneity']),
+        uvShortwave: toYesNo(firstApiValue(record, ['uv', 'uv_shortwave', 'shortwave_uv', 'sw_uv', 'fluorescence_shortwave'])),
+        uvLongwave: toYesNo(firstApiValue(record, ['uv', 'uv_longwave', 'longwave_uv', 'lw_uv', 'fluorescence_longwave'])),
+        phosphorescence: toYesNo(firstApiValue(record, ['phosphorescence', 'uv'])),
+        fluorescenceColour: firstApiValue(record, ['uv', 'fluorescence_colour', 'fluorescence_color', 'fluorescence']),
         chartroyancy: toYesNo(firstApiValue(record, ['chatoyancy', 'chartroyancy'])),
         iridescence: toYesNo(firstApiValue(record, ['iridescence'])),
-        strunz: firstApiValue(record, ['strunz_classification', 'strunz']),
-        dana: firstApiValue(record, ['dana_classification', 'dana']),
-        description: firstApiValue(record, ['description']),
+        strunz: strunz || firstApiValue(record, ['strunz_classification', 'strunz']),
+        dana: dana || firstApiValue(record, ['dana_classification', 'dana']),
+        description: firstApiValue(record, ['description_short', 'description']),
     };
 
     return Object.fromEntries(Object.entries(fields)
@@ -1647,6 +2007,41 @@ function firstApiValue(record, names) {
         return value;
     }
     return '';
+}
+
+function firstNonZeroApiValue(record, names) {
+    for (const name of names) {
+        const value = firstApiValue(record, [name]);
+        if (!isZeroLikeMindatValue(value)) {
+            return value;
+        }
+    }
+    return '';
+}
+
+function formatMindatRange(record, minNames, maxNames) {
+    const minValue = firstApiValue(record, minNames);
+    const maxValue = firstApiValue(record, maxNames);
+    const values = [minValue, maxValue].filter((value) => !isZeroLikeMindatValue(value));
+    if (!values.length) {
+        return '';
+    }
+    if (values.length === 2 && String(values[0]).trim() === String(values[1]).trim()) {
+        return String(values[0]).trim();
+    }
+    return values.map((value) => String(value).trim()).join(' - ');
+}
+
+function formatMindatCode(parts) {
+    const cleanedParts = parts
+        .map((part) => String(part || '').trim())
+        .filter((part) => part && !isZeroLikeMindatValue(part));
+    return cleanedParts.join('.');
+}
+
+function isZeroLikeMindatValue(value) {
+    const text = String(value ?? '').trim();
+    return !text || /^0+(?:\.0+)?$/.test(text);
 }
 
 function htmlToSearchableText(html) {
@@ -1809,9 +2204,9 @@ function validateCsvRecords(records) {
         }
 
         const photos = normalizePhotos(record.photos ? safeParsePhotos(record.photos) : [], record.photo);
-        const oversizedPhoto = photos.find((item) => item.size > MAX_PHOTO_SIZE_BYTES);
+        const oversizedPhoto = photos.find((item) => getStoredPhotoSize(item) > MAX_PHOTO_SIZE_BYTES);
         if (oversizedPhoto) {
-            errors.push(`Row ${index + 2}: ${oversizedPhoto.name || 'Photo'} exceeds the 5 GB limit`);
+            errors.push(`Row ${index + 2}: ${oversizedPhoto.originalName || oversizedPhoto.name || 'Photo'} exceeds the 50 MB limit`);
         }
     });
 
@@ -1831,12 +2226,12 @@ function safeParsePhotos(value) {
     }
 }
 
-function insertCsvRecords(records, callback) {
+function insertCsvRecords(records, ownerEmail, callback) {
     const sql = `
         INSERT INTO minerals (
             specimenId, name, type, groupName, subgroup, date, origin, description, photo, photos,
-            ${EXTRA_MINERAL_FIELDS.join(', ')}, createdAt
-        ) VALUES (${Array.from({ length: 11 + EXTRA_MINERAL_FIELDS.length }, () => '?').join(', ')})
+            ${EXTRA_MINERAL_FIELDS.join(', ')}, ownerEmail, createdAt
+        ) VALUES (${Array.from({ length: 12 + EXTRA_MINERAL_FIELDS.length }, () => '?').join(', ')})
     `;
     const createdAt = new Date().toISOString();
 
@@ -1863,6 +2258,7 @@ function insertCsvRecords(records, callback) {
                 photos[0]?.dataUrl || record.photo || '',
                 JSON.stringify(photos),
                 ...getExtraMineralValues(record),
+                ownerEmail,
                 createdAt,
             ], (error) => {
                 if (error) {

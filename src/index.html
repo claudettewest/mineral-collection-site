@@ -3,21 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mineral database</title>
-    <link rel="icon" href="/diamond.ico" type="image/x-icon">
+    <title>My-Geo-Collection.com</title>
+    <link rel="icon" href="/geo_icon.png" type="image/png">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="app-shell">
         <aside class="side-nav" aria-label="Primary navigation">
-            <div class="side-nav-title">Mineral database</div>
+            <div class="side-nav-title">Navigation</div>
             <nav>
-                <button type="button" class="side-nav-item is-active" data-nav="dashboard">Dashboard</button>
+                <button type="button" class="side-nav-item is-active home-nav-item" data-nav="landing" aria-label="Home" title="Home">
+                    <span class="home-icon" aria-hidden="true">&#8962;</span>
+                    <span class="home-label">Home</span>
+                </button>
+                <button type="button" class="side-nav-item" data-nav="dashboard">Dashboard</button>
                 <button type="button" class="side-nav-item" data-nav="collection">Collection</button>
                 <button type="button" class="side-nav-item" data-nav="add-specimen">Add Specimen</button>
-                <button type="button" class="side-nav-item" data-nav="locations">Locations</button>
                 <button type="button" class="side-nav-item">Search</button>
                 <button type="button" class="side-nav-item" data-nav="ai-assistant">AI Assistant</button>
+                <button type="button" class="side-nav-item" data-nav="auth">Login / Register</button>
                 <button type="button" class="side-nav-item settings-nav-item" data-nav="settings" aria-label="Settings" title="Settings">
                     <span class="settings-icon" aria-hidden="true">&#9881;</span>
                     <span class="settings-label">Settings</span>
@@ -30,33 +34,93 @@
                 <button type="button" class="mobile-menu-button" data-role="mobile-menu" aria-label="Open navigation" aria-expanded="false">
                     <span aria-hidden="true">&#9662;</span>
                 </button>
-                <h1>Mineral database</h1>
+                <h1>My-Geo-Collection.com</h1>
             </header>
             <main>
-                <section id="dashboard-container">
+                <section id="landing-container">
+                    <div class="landing-page">
+                        <section class="welcome-banner">
+                            <div>
+                                <p class="welcome-back" data-landing="welcome-back" hidden></p>
+                                <p>A curated view of your minerals, rocks and fossils.</p>
+                            </div>
+                        </section>
+                        <div class="dashboard-showcase">
+                            <div class="showcase-header">
+                                <h3>Latest Specimens</h3>
+                            </div>
+                            <div class="latest-specimens" data-dashboard="latest-specimens"></div>
+                        </div>
+                    </div>
+                </section>
+                <section id="dashboard-container" style="display:none;">
                     <div class="dashboard">
                         <div class="dashboard-header">
                             <h2>Dashboard</h2>
                         </div>
-                        <div class="dashboard-metrics">
-                            <article class="metric-card">
-                                <span>Total Specimens</span>
-                                <strong data-dashboard="total-specimens">0</strong>
-                            </article>
-                            <article class="metric-card">
-                                <span>Locations</span>
-                                <strong data-dashboard="locations">0</strong>
-                            </article>
-                            <article class="metric-card">
-                                <span>Photos</span>
-                                <strong data-dashboard="photos">0</strong>
-                            </article>
+                        <div class="dashboard-overview">
+                            <div class="dashboard-chart-panel">
+                                <h3>Specimens by Type</h3>
+                                <div class="type-chart-layout">
+                                    <div class="type-pie" data-dashboard="type-pie" role="img" aria-label="Specimens by type pie chart"></div>
+                                    <div class="type-legend" data-dashboard="type-legend"></div>
+                                </div>
+                            </div>
+                            <div class="dashboard-metrics">
+                                <article class="metric-card">
+                                    <span>Total Specimens</span>
+                                    <strong data-dashboard="total-specimens">0</strong>
+                                </article>
+                                <article class="metric-card">
+                                    <span>Locations</span>
+                                    <strong data-dashboard="locations">0</strong>
+                                </article>
+                                <article class="metric-card">
+                                    <span>Photos</span>
+                                    <strong data-dashboard="photos">0</strong>
+                                </article>
+                                <article class="metric-card">
+                                    <span>Last 30 Days</span>
+                                    <strong data-dashboard="recent-specimens">0</strong>
+                                </article>
+                            </div>
                         </div>
-                        <div class="dashboard-chart-panel">
-                            <h3>Specimens by Type</h3>
-                            <div class="type-chart-layout">
-                                <div class="type-pie" data-dashboard="type-pie" role="img" aria-label="Specimens by type pie chart"></div>
-                                <div class="type-legend" data-dashboard="type-legend"></div>
+                        <div class="dashboard-chart-panel dashboard-locations-panel">
+                            <h3>Specimens by Region</h3>
+                            <div class="locations-page">
+                                <div class="continent-icon-grid" aria-label="Specimens by continent">
+                                    <article class="continent-icon-card">
+                                        <img src="/maps/north_america.png" alt="North America">
+                                        <span>North America</span>
+                                        <strong data-continent-count="North America">0</strong>
+                                    </article>
+                                    <article class="continent-icon-card">
+                                        <img src="/maps/south_america.png" alt="South America">
+                                        <span>South America</span>
+                                        <strong data-continent-count="South America">0</strong>
+                                    </article>
+                                    <article class="continent-icon-card">
+                                        <img src="/maps/europe.png" alt="Europe">
+                                        <span>Europe</span>
+                                        <strong data-continent-count="Europe">0</strong>
+                                    </article>
+                                    <article class="continent-icon-card">
+                                        <img src="/maps/africa.png" alt="Africa">
+                                        <span>Africa</span>
+                                        <strong data-continent-count="Africa">0</strong>
+                                    </article>
+                                    <article class="continent-icon-card">
+                                        <img src="/maps/asia.png" alt="Asia">
+                                        <span>Asia</span>
+                                        <strong data-continent-count="Asia">0</strong>
+                                    </article>
+                                    <article class="continent-icon-card">
+                                        <img src="/maps/oceania.png" alt="Oceania">
+                                        <span>Oceania</span>
+                                        <strong data-continent-count="Oceania">0</strong>
+                                    </article>
+                                </div>
+                                <div class="continent-summary" data-role="continent-summary"></div>
                             </div>
                         </div>
                     </div>
@@ -65,44 +129,6 @@
                 <section id="upload-container" style="display:none;"></section>
                 <section id="list-container" style="display:none;"></section>
                 <section id="gemma-container" style="display:none;"></section>
-                <section id="locations-container" style="display:none;">
-                    <div class="locations-page">
-                        <h2>Locations</h2>
-                        <div class="continent-icon-grid" aria-label="Specimens by continent">
-                            <article class="continent-icon-card">
-                                <img src="/maps/north_america.png" alt="North America">
-                                <span>North America</span>
-                                <strong data-continent-count="North America">0</strong>
-                            </article>
-                            <article class="continent-icon-card">
-                                <img src="/maps/south_america.png" alt="South America">
-                                <span>South America</span>
-                                <strong data-continent-count="South America">0</strong>
-                            </article>
-                            <article class="continent-icon-card">
-                                <img src="/maps/europe.png" alt="Europe">
-                                <span>Europe</span>
-                                <strong data-continent-count="Europe">0</strong>
-                            </article>
-                            <article class="continent-icon-card">
-                                <img src="/maps/africa.png" alt="Africa">
-                                <span>Africa</span>
-                                <strong data-continent-count="Africa">0</strong>
-                            </article>
-                            <article class="continent-icon-card">
-                                <img src="/maps/asia.png" alt="Asia">
-                                <span>Asia</span>
-                                <strong data-continent-count="Asia">0</strong>
-                            </article>
-                            <article class="continent-icon-card">
-                                <img src="/maps/oceania.png" alt="Oceania">
-                                <span>Oceania</span>
-                                <strong data-continent-count="Oceania">0</strong>
-                            </article>
-                        </div>
-                        <div class="continent-summary" data-role="continent-summary"></div>
-                    </div>
-                </section>
                 <section id="settings-container" style="display:none;">
                     <div class="settings-page">
                         <h2>Settings</h2>
@@ -112,6 +138,58 @@
                                 <button type="button" data-theme-option="dark">Dark</button>
                                 <button type="button" data-theme-option="light">Light</button>
                             </div>
+                        </div>
+                    </div>
+                </section>
+                <section id="auth-container" style="display:none;">
+                    <div class="auth-page">
+                        <div class="auth-header">
+                            <h2>Login / Register</h2>
+                            <p data-auth="current-user">No user is logged in.</p>
+                        </div>
+                        <div class="auth-grid">
+                            <form class="auth-form" data-auth="register-form">
+                                <h3>Register</h3>
+                                <label>
+                                    Full Name
+                                    <input type="text" name="fullName" autocomplete="name" required>
+                                </label>
+                                <label>
+                                    Email Address
+                                    <input type="email" name="email" autocomplete="email" required>
+                                </label>
+                                <label class="checkbox-field">
+                                    <input type="checkbox" name="receiveEmails">
+                                    <span>Receive emails</span>
+                                </label>
+                                <label>
+                                    Password
+                                    <input type="password" name="password" autocomplete="new-password" required>
+                                </label>
+                                <label>
+                                    Confirm Password
+                                    <input type="password" name="confirmPassword" autocomplete="new-password" required>
+                                </label>
+                                <div class="form-buttons">
+                                    <button type="submit">Register</button>
+                                </div>
+                                <p class="auth-status" data-auth="register-status" role="status"></p>
+                            </form>
+                            <form class="auth-form" data-auth="login-form">
+                                <h3>Login</h3>
+                                <label>
+                                    Email Address
+                                    <input type="email" name="email" autocomplete="email" required>
+                                </label>
+                                <label>
+                                    Password
+                                    <input type="password" name="password" autocomplete="current-password" required>
+                                </label>
+                                <div class="form-buttons">
+                                    <button type="submit">Login</button>
+                                </div>
+                                <p class="auth-status" data-auth="login-status" role="status"></p>
+                            </form>
                         </div>
                     </div>
                 </section>

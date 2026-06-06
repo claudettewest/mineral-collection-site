@@ -64,6 +64,7 @@ class UploadForm {
         try {
             const response = await fetch('/api/minerals/upload-csv', {
                 method: 'POST',
+                headers: this._authHeaders(),
                 body: formData,
             });
             const result = await response.json();
@@ -88,12 +89,12 @@ class UploadForm {
     }
 
     async _deleteAllData() {
-        const firstConfirm = confirm('This will permanently delete every record in the database. Continue?');
+        const firstConfirm = confirm('This will permanently delete every record in your collection. Continue?');
         if (!firstConfirm) {
             return;
         }
 
-        const secondConfirm = confirm('All mineral records will be deleted and the next ID will reset to 0001. This cannot be undone. Delete all data?');
+        const secondConfirm = confirm('All mineral records in your collection will be deleted. This cannot be undone. Delete all data?');
         if (!secondConfirm) {
             return;
         }
@@ -103,6 +104,7 @@ class UploadForm {
         try {
             const response = await fetch('/api/minerals', {
                 method: 'DELETE',
+                headers: this._authHeaders(),
             });
             const result = await response.json();
 
@@ -112,7 +114,7 @@ class UploadForm {
             }
 
             this.fileInput.value = '';
-            this._setStatus(`All records deleted. Next ID is ${result.formattedId || '0001'}.`);
+            this._setStatus('All records in your collection were deleted.');
             if (this.onDeleteAllCallback) {
                 this.onDeleteAllCallback();
             }
@@ -125,5 +127,11 @@ class UploadForm {
     _setStatus(message, isError = false) {
         this.status.textContent = message;
         this.status.classList.toggle('error', isError);
+    }
+
+    _authHeaders() {
+        return typeof window.getMineralAuthHeaders === 'function'
+            ? window.getMineralAuthHeaders()
+            : {};
     }
 }

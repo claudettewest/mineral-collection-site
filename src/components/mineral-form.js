@@ -3,7 +3,6 @@
         this.onSubmitCallback = null;
         this.onCancelCallback = null;
         this.editingMineral = null;
-        this.MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024 * 1024;
         this.TYPE_OPTIONS = [
             'Element',
             'Mineral',
@@ -29,18 +28,13 @@
                     { name: 'id', label: 'ID', disabled: true },
                     { name: 'specimenId', label: 'Specimen Number', required: true },
                     { name: 'name', label: 'Name', required: true },
+                    { name: 'variety', label: 'Variety' },
                     { name: 'date', label: 'Date', type: 'date' },
                     { name: 'origin', label: 'Origin' },
                     { name: 'description', label: 'Description', multiline: true },
                     { name: 'gpsCoordinates', label: 'GPS Coordinates' },
                     { name: 'observations', label: 'Observations', multiline: true },
                     { name: 'createdAt', label: 'Created At', disabled: true },
-                ],
-            },
-            {
-                title: 'Photos',
-                fields: [
-                    { name: 'photos', label: 'Photos', type: 'file', multiple: true },
                 ],
             },
             {
@@ -86,6 +80,7 @@
             },
         ];
         this.EXTRA_FIELD_NAMES = [
+            'variety',
             'gpsCoordinates',
             'colour',
             'streak',
@@ -121,7 +116,6 @@
             <p class="augment-status" data-role="augment-status"></p>
             <div class="form-buttons">
                 <button type="button" data-role="augment">Augment</button>
-                <button type="button" data-role="update-photos" style="display:none;">Update</button>
                 <button type="submit" data-role="submit">Save</button>
                 <button type="button" data-role="cancel-edit" style="display:none;">Cancel</button>
             </div>
@@ -142,11 +136,6 @@
             event.preventDefault();
             this._submitForm({ returnToList: true });
         });
-        this.form.querySelector('input[name="photos"]').addEventListener('change', (event) => {
-            if (this._validatePhotoSizes(event.target)) {
-                this._updatePhotoUpdateButton();
-            }
-        });
         this.form.querySelector('[data-role="cancel-edit"]').addEventListener('click', () => {
             this.clear();
             if (this.onCancelCallback) {
@@ -156,9 +145,6 @@
         this.form.querySelector('[data-role="augment"]').addEventListener('click', () => {
             this._augmentFromMindat();
         });
-        this.form.querySelector('[data-role="update-photos"]').addEventListener('click', () => {
-            this._submitForm({ returnToList: false });
-        });
         this._setGeneratedFieldsForNewRecord();
         this._updateGroupControl();
 
@@ -166,70 +152,25 @@
     }
 
     _submitForm(options = { returnToList: true }) {
-        const photoInput = this.form.querySelector('input[name="photos"]');
-        const photoFiles = Array.from(photoInput.files);
-
-        if (!this._validatePhotoSizes(photoInput)) {
-            return;
-        }
-
         const existingPhotos = this.editingMineral ? this._getExistingPhotos(this.editingMineral) : [];
-        const photosPromise = photoFiles.length
-            ? Promise.all(photoFiles.map((file) => this._readPhoto(file)))
-                .then((newPhotos) => [...existingPhotos, ...newPhotos])
-            : Promise.resolve(existingPhotos);
+        const mineralData = {
+            id: this.editingMineral?.id,
+            specimenId: this.form.querySelector('input[name="specimenId"]').value,
+            name: this.form.querySelector('input[name="name"]').value,
+            type: this.form.querySelector('select[name="type"]').value,
+            groupName: this._getGroupValue(),
+            subgroup: this.form.querySelector('input[name="subgroup"]').value,
+            date: this.form.querySelector('input[name="date"]').value,
+            origin: this.form.querySelector('input[name="origin"]').value,
+            ...this._getExtraFieldValues(),
+            description: this.form.querySelector('textarea[name="description"]').value,
+            photos: existingPhotos,
+            photo: existingPhotos[0]?.dataUrl || '',
+        };
 
-        photosPromise
-            .then((photos) => {
-                const mineralData = {
-                    id: this.editingMineral?.id,
-                    specimenId: this.form.querySelector('input[name="specimenId"]').value,
-                    name: this.form.querySelector('input[name="name"]').value,
-                    type: this.form.querySelector('select[name="type"]').value,
-                    groupName: this._getGroupValue(),
-                    subgroup: this.form.querySelector('input[name="subgroup"]').value,
-                    date: this.form.querySelector('input[name="date"]').value,
-                    origin: this.form.querySelector('input[name="origin"]').value,
-                    ...this._getExtraFieldValues(),
-                    description: this.form.querySelector('textarea[name="description"]').value,
-                    photos,
-                    photo: photos[0]?.dataUrl || '',
-                };
-
-                if (this.onSubmitCallback) {
-                    this.onSubmitCallback(mineralData, options);
-                }
-            })
-            .catch((error) => {
-                console.error('Error reading photos:', error);
-                alert('Unable to read one or more selected photos.');
-            });
-    }
-
-    _validatePhotoSizes(photoInput) {
-        const oversizedFile = Array.from(photoInput.files)
-            .find((file) => file.size > this.MAX_PHOTO_SIZE_BYTES);
-        if (!oversizedFile) {
-            return true;
+        if (this.onSubmitCallback) {
+            this.onSubmitCallback(mineralData, options);
         }
-
-        alert(`${oversizedFile.name} is larger than the 5 GB limit.`);
-        photoInput.value = '';
-        return false;
-    }
-
-    _readPhoto(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve({
-                dataUrl: reader.result,
-                name: file.name,
-                size: file.size,
-                type: file.type,
-            });
-            reader.onerror = () => reject(reader.error);
-            reader.readAsDataURL(file);
-        });
     }
 
     onSubmit(callback) {
@@ -255,10 +196,8 @@
         });
         this.form.querySelector('textarea[name="description"]').value = mineral.description || '';
         this.form.querySelector('input[name="createdAt"]').value = mineral.createdAt || '';
-        this.form.querySelector('input[name="photos"]').required = false;
         this._resetSectionState();
         this.form.querySelector('[data-role="submit"]').textContent = 'Save';
-        this.form.querySelector('[data-role="update-photos"]').style.display = 'none';
         this.form.querySelector('[data-role="cancel-edit"]').style.display = '';
     }
 
@@ -269,18 +208,14 @@
             this._setGeneratedFieldsForNewRecord();
             this._updateGroupControl();
             this._setAugmentStatus('');
-            this.form.querySelector('input[name="photos"]').required = false;
             this._resetSectionState();
             this.form.querySelector('[data-role="submit"]').textContent = 'Save';
-            this.form.querySelector('[data-role="update-photos"]').style.display = 'none';
             this.form.querySelector('[data-role="cancel-edit"]').style.display = 'none';
         }
     }
 
     markSaved(mineral) {
         this.editingMineral = mineral;
-        this.form.querySelector('input[name="photos"]').value = '';
-        this.form.querySelector('[data-role="update-photos"]').style.display = 'none';
         this.form.querySelector('[data-role="submit"]').textContent = 'Save';
     }
 
@@ -357,12 +292,6 @@
             values[fieldName] = this.form.querySelector(`[name="${fieldName}"]`).value;
             return values;
         }, {});
-    }
-
-    _updatePhotoUpdateButton() {
-        const photoInput = this.form.querySelector('input[name="photos"]');
-        const updateButton = this.form.querySelector('[data-role="update-photos"]');
-        updateButton.style.display = this.editingMineral && photoInput.files.length ? '' : 'none';
     }
 
     _augmentFromMindat() {

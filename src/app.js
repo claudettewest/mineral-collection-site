@@ -4,22 +4,30 @@
     const uploadForm = new UploadForm();
     const gemmaAssistant = new GemmaAssistant();
 
+    const landingButton = document.querySelector('[data-nav="landing"]');
     const dashboardButton = document.querySelector('[data-nav="dashboard"]');
     const collectionButton = document.querySelector('[data-nav="collection"]');
     const addSpecimenNavButton = document.querySelector('[data-nav="add-specimen"]');
-    const locationsButton = document.querySelector('[data-nav="locations"]');
     const aiAssistantButton = document.querySelector('[data-nav="ai-assistant"]');
+    const authButton = document.querySelector('[data-nav="auth"]');
     const settingsButton = document.querySelector('[data-nav="settings"]');
     const navItems = document.querySelectorAll('.side-nav-item');
     const mobileMenuButton = document.querySelector('[data-role="mobile-menu"]');
     const navBackdrop = document.querySelector('[data-role="nav-backdrop"]');
+    const landingContainer = document.getElementById('landing-container');
     const dashboardContainer = document.getElementById('dashboard-container');
     const formContainer = document.getElementById('form-container');
     const uploadContainer = document.getElementById('upload-container');
     const listContainer = document.getElementById('list-container');
     const gemmaContainer = document.getElementById('gemma-container');
-    const locationsContainer = document.getElementById('locations-container');
     const settingsContainer = document.getElementById('settings-container');
+    const authContainer = document.getElementById('auth-container');
+    const registerForm = document.querySelector('[data-auth="register-form"]');
+    const loginForm = document.querySelector('[data-auth="login-form"]');
+    const registerStatus = document.querySelector('[data-auth="register-status"]');
+    const loginStatus = document.querySelector('[data-auth="login-status"]');
+    const currentUserStatus = document.querySelector('[data-auth="current-user"]');
+    const landingWelcomeBack = document.querySelector('[data-landing="welcome-back"]');
     const themeButtons = document.querySelectorAll('[data-theme-option]');
     const savedTheme = localStorage.getItem('mineral-theme') || 'dark';
 
@@ -27,7 +35,12 @@
     uploadContainer.appendChild(uploadForm.render());
     listContainer.appendChild(mineralList.render());
     gemmaContainer.appendChild(gemmaAssistant.render());
+    window.getMineralAuthHeaders = getAuthHeaders;
     applyTheme(savedTheme);
+
+    landingButton.addEventListener('click', () => {
+        showLanding();
+    });
 
     dashboardButton.addEventListener('click', () => {
         showDashboard();
@@ -42,16 +55,16 @@
         showForm();
     });
 
-    locationsButton.addEventListener('click', () => {
-        showLocations();
-    });
-
     aiAssistantButton.addEventListener('click', () => {
         showGemma();
     });
 
     settingsButton.addEventListener('click', () => {
         showSettings();
+    });
+
+    authButton.addEventListener('click', () => {
+        showAuth();
     });
 
     mobileMenuButton.addEventListener('click', () => {
@@ -80,84 +93,142 @@
         });
     });
 
+    registerForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        setAuthStatus(registerStatus, 'Registering...');
+        const formData = new FormData(registerForm);
+        const payload = {
+            fullName: String(formData.get('fullName') || '').trim(),
+            email: String(formData.get('email') || '').trim(),
+            receiveEmails: formData.get('receiveEmails') === 'on',
+            password: String(formData.get('password') || ''),
+            confirmPassword: String(formData.get('confirmPassword') || ''),
+        };
+
+        try {
+            const user = await submitAuth('/api/register', payload);
+            saveCurrentUser(user);
+            registerForm.reset();
+            setAuthStatus(registerStatus, `Registered ${user.fullName} as ${user.userType}.`, 'success');
+        } catch (error) {
+            setAuthStatus(registerStatus, error.message, 'error');
+        }
+    });
+
+    loginForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        setAuthStatus(loginStatus, 'Logging in...');
+        const formData = new FormData(loginForm);
+        const payload = {
+            email: String(formData.get('email') || '').trim(),
+            password: String(formData.get('password') || ''),
+        };
+
+        try {
+            const user = await submitAuth('/api/login', payload);
+            saveCurrentUser(user);
+            loginForm.reset();
+            setAuthStatus(loginStatus, `Logged in as ${user.fullName}.`, 'success');
+        } catch (error) {
+            setAuthStatus(loginStatus, error.message, 'error');
+        }
+    });
+
+    renderCurrentUser();
+
     function showDashboard() {
+        landingContainer.style.display = 'none';
         dashboardContainer.style.display = '';
         formContainer.style.display = 'none';
         uploadContainer.style.display = 'none';
         listContainer.style.display = 'none';
         gemmaContainer.style.display = 'none';
-        locationsContainer.style.display = 'none';
         settingsContainer.style.display = 'none';
+        authContainer.style.display = 'none';
         setActiveNav('dashboard');
     }
 
     function showLanding() {
-        showDashboard();
+        landingContainer.style.display = '';
+        dashboardContainer.style.display = 'none';
+        formContainer.style.display = 'none';
+        uploadContainer.style.display = 'none';
+        listContainer.style.display = 'none';
+        gemmaContainer.style.display = 'none';
+        settingsContainer.style.display = 'none';
+        authContainer.style.display = 'none';
+        setActiveNav('landing');
     }
 
     function showForm() {
+        landingContainer.style.display = 'none';
         dashboardContainer.style.display = 'none';
         formContainer.style.display = '';
         uploadContainer.style.display = 'none';
         listContainer.style.display = 'none';
         gemmaContainer.style.display = 'none';
-        locationsContainer.style.display = 'none';
         settingsContainer.style.display = 'none';
+        authContainer.style.display = 'none';
         setActiveNav('add-specimen');
     }
 
     function showUpload() {
+        landingContainer.style.display = 'none';
         dashboardContainer.style.display = 'none';
         formContainer.style.display = 'none';
         uploadContainer.style.display = '';
         listContainer.style.display = 'none';
         gemmaContainer.style.display = 'none';
-        locationsContainer.style.display = 'none';
         settingsContainer.style.display = 'none';
+        authContainer.style.display = 'none';
     }
 
     function showList() {
+        landingContainer.style.display = 'none';
         dashboardContainer.style.display = 'none';
         formContainer.style.display = 'none';
         uploadContainer.style.display = 'none';
         listContainer.style.display = '';
         gemmaContainer.style.display = 'none';
-        locationsContainer.style.display = 'none';
         settingsContainer.style.display = 'none';
+        authContainer.style.display = 'none';
         setActiveNav('collection');
     }
 
-    function showLocations() {
-        dashboardContainer.style.display = 'none';
-        formContainer.style.display = 'none';
-        uploadContainer.style.display = 'none';
-        listContainer.style.display = 'none';
-        gemmaContainer.style.display = 'none';
-        locationsContainer.style.display = '';
-        settingsContainer.style.display = 'none';
-        setActiveNav('locations');
-    }
-
     function showGemma() {
+        landingContainer.style.display = 'none';
         dashboardContainer.style.display = 'none';
         formContainer.style.display = 'none';
         uploadContainer.style.display = 'none';
         listContainer.style.display = 'none';
         gemmaContainer.style.display = '';
-        locationsContainer.style.display = 'none';
         settingsContainer.style.display = 'none';
+        authContainer.style.display = 'none';
         setActiveNav('ai-assistant');
     }
 
     function showSettings() {
+        landingContainer.style.display = 'none';
         dashboardContainer.style.display = 'none';
         formContainer.style.display = 'none';
         uploadContainer.style.display = 'none';
         listContainer.style.display = 'none';
         gemmaContainer.style.display = 'none';
-        locationsContainer.style.display = 'none';
         settingsContainer.style.display = '';
+        authContainer.style.display = 'none';
         setActiveNav('settings');
+    }
+
+    function showAuth() {
+        landingContainer.style.display = 'none';
+        dashboardContainer.style.display = 'none';
+        formContainer.style.display = 'none';
+        uploadContainer.style.display = 'none';
+        listContainer.style.display = 'none';
+        gemmaContainer.style.display = 'none';
+        settingsContainer.style.display = 'none';
+        authContainer.style.display = '';
+        setActiveNav('auth');
     }
 
     function setActiveNav(navName) {
@@ -183,10 +254,65 @@
         });
     }
 
+    async function submitAuth(url, payload) {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(body.error || 'The request failed');
+        }
+        return body;
+    }
+
+    function saveCurrentUser(user) {
+        localStorage.setItem('mineral-user', JSON.stringify(user));
+        renderCurrentUser();
+        refreshMinerals();
+    }
+
+    function getCurrentUser() {
+        try {
+            return JSON.parse(localStorage.getItem('mineral-user') || 'null');
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function renderCurrentUser() {
+        const user = getCurrentUser();
+        currentUserStatus.textContent = user
+            ? `Logged in as ${user.fullName} (${user.userType}).`
+            : 'No user is logged in.';
+        landingWelcomeBack.hidden = !user;
+        landingWelcomeBack.textContent = user ? `Welcome back, ${user.fullName}.` : '';
+    }
+
+    function setAuthStatus(element, message, state = '') {
+        element.textContent = message;
+        element.dataset.state = state;
+    }
+
+    function getAuthHeaders(extraHeaders = {}) {
+        const user = getCurrentUser();
+        return user?.email
+            ? { ...extraHeaders, 'X-User-Email': user.email }
+            : { ...extraHeaders };
+    }
+
+    function apiFetch(url, options = {}) {
+        return fetch(url, {
+            ...options,
+            headers: getAuthHeaders(options.headers || {}),
+        });
+    }
+
     mineralForm.onSubmit(async (mineral, options = { returnToList: true }) => {
         try {
             const isEdit = Boolean(mineral.id);
-            const response = await fetch(isEdit ? `/api/minerals/${mineral.id}` : '/api/minerals', {
+            const response = await apiFetch(isEdit ? `/api/minerals/${mineral.id}` : '/api/minerals', {
                 method: isEdit ? 'PUT' : 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(mineral),
@@ -203,6 +329,7 @@
             } else {
                 mineralList.addMineral(savedMineral);
             }
+            renderLanding(mineralList.minerals);
             renderDashboard(mineralList.minerals);
             renderLocations(mineralList.minerals);
             if (options.returnToList) {
@@ -240,7 +367,7 @@
         }
 
         try {
-            const response = await fetch(`/api/minerals/${mineral.id}`, {
+            const response = await apiFetch(`/api/minerals/${mineral.id}`, {
                 method: 'DELETE',
             });
 
@@ -250,6 +377,7 @@
             }
 
             mineralList.removeMineral(mineral.id);
+            renderLanding(mineralList.minerals);
             renderDashboard(mineralList.minerals);
             renderLocations(mineralList.minerals);
         } catch (error) {
@@ -257,11 +385,47 @@
         }
     });
 
+    mineralList.onPhotos(async (mineral, newPhotos) => {
+        const fullMineral = await fetchFullMineral(mineral.id);
+        const existingPhotos = normalizeMineralPhotos(fullMineral);
+        const photos = [...existingPhotos, ...newPhotos];
+        const updatedMineral = {
+            ...fullMineral,
+            photos,
+            photo: '',
+        };
+
+        const response = await apiFetch(`/api/minerals/${mineral.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updatedMineral),
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to save photos');
+        }
+
+        const savedMineral = await response.json();
+        mineralList.updateMineral(savedMineral);
+        renderLanding(mineralList.minerals);
+        renderDashboard(mineralList.minerals);
+        renderLocations(mineralList.minerals);
+    });
+
     function refreshMinerals() {
-        return fetch('/api/minerals')
+        if (!getCurrentUser()) {
+            mineralList.setMinerals([]);
+            renderLanding([]);
+            renderDashboard([]);
+            renderLocations([]);
+            return Promise.resolve([]);
+        }
+
+        return apiFetch('/api/minerals')
             .then((response) => response.json())
             .then((minerals) => {
                 mineralList.setMinerals(minerals);
+                renderLanding(minerals);
                 renderDashboard(minerals);
                 renderLocations(minerals);
             })
@@ -274,31 +438,78 @@
             .map((mineral) => String(mineral.origin || '').trim())
             .filter(Boolean));
         const photoCount = records.reduce((count, mineral) => count + getPhotoCount(mineral), 0);
+        const recentCount = records.filter(wasAddedInLast30Days).length;
         const typeCounts = getTypeCounts(records);
 
         document.querySelector('[data-dashboard="total-specimens"]').textContent = records.length;
         document.querySelector('[data-dashboard="locations"]').textContent = locations.size;
         document.querySelector('[data-dashboard="photos"]').textContent = photoCount;
+        document.querySelector('[data-dashboard="recent-specimens"]').textContent = recentCount;
         renderTypeChart(typeCounts, records.length);
     }
 
+    function renderLanding(minerals) {
+        if (!getCurrentUser()) {
+            renderLatestLoginPrompt();
+            return;
+        }
+
+        const records = Array.isArray(minerals) ? minerals : [];
+        renderLatestSpecimens(records);
+        apiFetch('/api/minerals/latest?limit=5')
+            .then((response) => (response.ok ? response.json() : []))
+            .then((latestMinerals) => {
+                if (latestMinerals.length) {
+                    renderLatestSpecimens(latestMinerals);
+                }
+            })
+            .catch((error) => console.error('Error loading latest specimen photos:', error));
+    }
+
     function getPhotoCount(mineral) {
+        if (Number.isFinite(Number(mineral.photoCount))) {
+            return Number(mineral.photoCount);
+        }
+        return normalizeMineralPhotos(mineral).length;
+    }
+
+    function wasAddedInLast30Days(mineral) {
+        const createdAt = Date.parse(mineral.createdAt || '');
+        if (!Number.isFinite(createdAt)) {
+            return false;
+        }
+
+        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+        return Date.now() - createdAt <= thirtyDaysMs;
+    }
+
+    function fetchFullMineral(id) {
+        return apiFetch(`/api/minerals/${id}`)
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error('Unable to load specimen details');
+                }
+                return response.json();
+            });
+    }
+
+    function normalizeMineralPhotos(mineral) {
         if (Array.isArray(mineral.photos)) {
-            return mineral.photos.length;
+            return mineral.photos;
         }
 
         if (mineral.photos) {
             try {
                 const photos = JSON.parse(mineral.photos);
                 if (Array.isArray(photos)) {
-                    return photos.length;
+                    return photos;
                 }
             } catch (error) {
                 console.error('Error parsing mineral photos:', error);
             }
         }
 
-        return mineral.photo ? 1 : 0;
+        return mineral.photo ? [{ dataUrl: mineral.photo, name: mineral.name || '', size: 0, type: '' }] : [];
     }
 
     function getTypeCounts(minerals) {
@@ -340,6 +551,43 @@
                 <strong>${item.count}</strong>
             </div>
         `).join('');
+    }
+
+    function renderLatestSpecimens(minerals) {
+        const container = document.querySelector('[data-dashboard="latest-specimens"]');
+        const latest = [...minerals]
+            .sort((left, right) => Number(right.id || 0) - Number(left.id || 0))
+            .slice(0, 5);
+
+        if (!latest.length) {
+            container.innerHTML = '<p class="dashboard-empty">No specimens recorded yet.</p>';
+            return;
+        }
+
+        container.innerHTML = latest.map((mineral, index) => {
+            const photo = normalizeMineralPhotos(mineral)[0];
+            const photoSrc = typeof photo === 'string' ? photo : photo?.mainWebp || photo?.dataUrl || photo?.thumbWebp || '/no_photo.png';
+            const isPlaceholder = photoSrc === '/no_photo.png';
+            const number = mineral.specimenId || String(mineral.id || '').padStart(4, '0');
+            const description = String(mineral.description || '').trim() || 'No description recorded yet.';
+            return `
+                <article class="latest-specimen-card${index === 0 ? ' is-featured' : ''}">
+                    <div class="latest-photo">
+                        <img class="${isPlaceholder ? 'is-placeholder' : ''}" src="${escapeHtml(photoSrc)}" alt="${escapeHtml(`${mineral.name || 'Specimen'} photo`)}" loading="lazy">
+                    </div>
+                    <div class="latest-specimen-copy">
+                        <span class="latest-number">${escapeHtml(number)}</span>
+                        <h4>${escapeHtml(mineral.name || 'Unnamed specimen')}</h4>
+                        <p>${escapeHtml(description)}</p>
+                    </div>
+                </article>
+            `;
+        }).join('');
+    }
+
+    function renderLatestLoginPrompt() {
+        const container = document.querySelector('[data-dashboard="latest-specimens"]');
+        container.innerHTML = '<p class="dashboard-empty landing-login-message">Login/register to start adding your collection</p>';
     }
 
     function escapeHtml(value) {
@@ -411,5 +659,5 @@
     }
 
     refreshMinerals();
-    showDashboard();
+    showLanding();
 });
