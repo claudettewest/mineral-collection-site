@@ -1184,6 +1184,51 @@ a:hover {
     color: var(--muted);
 }
 
+.photo-upload-existing-wrap {
+    display: grid;
+    gap: 12px;
+}
+
+.photo-upload-section-title {
+    color: var(--muted);
+    font-weight: 700;
+}
+
+.photo-upload-existing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+    gap: 12px;
+}
+
+.photo-upload-existing-item {
+    position: relative;
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 14px;
+    background: var(--panel-soft);
+    box-shadow: var(--small-raised-shadow);
+}
+
+.photo-upload-existing-item img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: 10px;
+}
+
+.photo-upload-remove {
+    min-height: 34px;
+    padding: 8px 10px;
+    background: var(--danger);
+    color: var(--text);
+}
+
+.photo-upload-remove:hover,
+.photo-upload-remove:focus-visible {
+    background: var(--danger-hover);
+}
+
 .photo-viewer-content {
     position: relative;
     display: grid;

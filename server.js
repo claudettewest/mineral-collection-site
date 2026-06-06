@@ -839,6 +839,52 @@ app.put('/api/minerals/:id', (req, res) => {
     });
 });
 
+app.post('/api/minerals/:id/photos', (req, res) => {
+    const ownerEmail = getRequestUserEmail(req);
+    if (!ownerEmail) {
+        return res.status(401).json({ error: 'Login is required' });
+    }
+    const photos = normalizePhotos(req.body.photos, '');
+    const oversizedPhoto = photos.find((item) => getStoredPhotoSize(item) > MAX_PHOTO_SIZE_BYTES);
+    if (oversizedPhoto) {
+        return res.status(400).json({ error: `${oversizedPhoto.originalName || oversizedPhoto.name || 'Photo'} exceeds the 50 MB limit` });
+    }
+
+    db.run(
+        `
+            UPDATE minerals
+            SET photo = ?,
+                photos = ?
+            WHERE id = ? AND ownerEmail = ?
+        `,
+        [
+            photos[0]?.mainWebp || photos[0]?.dataUrl || '',
+            JSON.stringify(photos),
+            req.params.id,
+            ownerEmail,
+        ],
+        function (updateError) {
+            if (updateError) {
+                console.error('Error updating mineral photos:', updateError);
+                return res.status(500).json({ error: 'Database error' });
+            }
+
+            if (!this.changes) {
+                return res.status(404).json({ error: 'Mineral not found' });
+            }
+
+            db.get('SELECT * FROM minerals WHERE id = ? AND ownerEmail = ?', [req.params.id, ownerEmail], (fetchError, savedRow) => {
+                if (fetchError) {
+                    console.error('Error fetching updated mineral photos:', fetchError);
+                    return res.status(500).json({ error: 'Database error' });
+                }
+
+                res.json(savedRow);
+            });
+        }
+    );
+});
+
 app.delete('/api/minerals/:id', (req, res) => {
     const ownerEmail = getRequestUserEmail(req);
     if (!ownerEmail) {
@@ -900,6 +946,7 @@ function toMineralListRow(row) {
     const { photo, photos: rawPhotos, ...listRow } = row;
     return {
         ...listRow,
+        thumbnailPhoto: photos[0] || null,
         photoCount: photos.length,
     };
 }

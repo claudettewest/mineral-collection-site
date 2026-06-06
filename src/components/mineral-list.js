@@ -5,6 +5,11 @@
         this.onDeleteCallback = null;
         this.onPhotosCallback = null;
         this.photoTargetMineral = null;
+        this.photoUploadExistingPhotos = [];
+        this.photoUploadRemovedPhotoKeys = new Set();
+        this.photoUploadLoadedMineralId = null;
+        this.photoUploadLoadToken = 0;
+        this.photoUploadHasChanges = false;
         this.MAX_PHOTO_SIZE_BYTES = 50 * 1024 * 1024;
         this.ACCEPTED_PHOTO_TYPES = new Set([
             'image/jpeg',
@@ -98,6 +103,10 @@
                         <input type="text" name="photoSpecimenId" autocomplete="off">
                     </label>
                     <p class="photo-upload-match" data-role="photo-upload-match">Enter a specimen number.</p>
+                    <div class="photo-upload-existing-wrap" data-role="photo-upload-existing-wrap" hidden>
+                        <div class="photo-upload-section-title">Existing photos</div>
+                        <div class="photo-upload-existing-grid" data-role="photo-upload-existing"></div>
+                    </div>
                     <label>
                         Photos
                         <input type="file" name="photoFiles" accept="image/jpeg,image/png,image/heic,image/heif,image/webp,.jpg,.jpeg,.png,.heic,.heif,.webp" multiple disabled>
@@ -125,6 +134,8 @@
         this.photoSpecimenInput = this.photoUploadForm.querySelector('input[name="photoSpecimenId"]');
         this.photoFileInput = this.photoUploadForm.querySelector('input[name="photoFiles"]');
         this.photoUploadMatch = this.container.querySelector('[data-role="photo-upload-match"]');
+        this.photoUploadExistingWrap = this.container.querySelector('[data-role="photo-upload-existing-wrap"]');
+        this.photoUploadExisting = this.container.querySelector('[data-role="photo-upload-existing"]');
         this.photoUploadStatus = this.container.querySelector('[data-role="photo-upload-status"]');
         this.photoUploadSaveButton = this.container.querySelector('[data-action="save-photo-upload"]');
         this.activeDetailsMineral = null;
@@ -185,6 +196,7 @@
         });
         this.photoFileInput.addEventListener('change', () => {
             this._validatePhotoFiles();
+            this.photoUploadHasChanges = this.photoFileInput.files.length > 0 || this.photoUploadRemovedPhotoKeys.size > 0;
             this._updatePhotoUploadSaveState();
         });
         this.photoUploadForm.addEventListener('submit', (event) => {
@@ -218,7 +230,7 @@
     _appendMineral(mineral, prepend = false) {
         const row = document.createElement('tr');
         const groupValue = mineral.group || mineral.groupName || '';
-        const firstPhoto = this.isCompactListView ? null : this._getPhotos(mineral)[0];
+        const firstPhoto = this.isCompactListView ? null : this._getPhotos(mineral)[0] || mineral.thumbnailPhoto || null;
         row.tabIndex = 0;
         row.setAttribute('role', 'button');
         row.setAttribute('aria-label', `Open details for ${mineral.specimenId || mineral.name}`);
@@ -306,16 +318,16 @@
             }
         }
 
+        if (mineral.thumbnailPhoto) {
+            return [mineral.thumbnailPhoto];
+        }
+
         return mineral.photo ? [{ dataUrl: mineral.photo, name: mineral.name }] : [];
     }
 
     _renderThumbnail(photo, mineralName) {
-        const src = typeof photo === 'string' ? photo : photo?.thumbWebp || photo?.dataUrl || photo?.mainWebp;
+        const src = typeof photo === 'string' ? photo : photo?.thumbWebp || photo?.dataUrl || photo?.mainWebp || '/no_photo.png';
         const name = typeof photo === 'string' ? mineralName : photo?.name || mineralName;
-        if (!src) {
-            return '';
-        }
-
         const title = name ? ` title="${this._escape(name)}"` : '';
         return `<span class="mineral-thumbnail-link"${title}><img class="mineral-thumbnail" src="${this._escape(src)}" alt="${this._escape(`${mineralName} thumbnail`)}" loading="lazy" /></span>`;
     }
@@ -454,7 +466,9 @@
     }
 
     _loadFullMineral(id) {
-        return fetch(`/api/minerals/${id}`)
+        return fetch(`/api/minerals/${id}`, {
+            headers: this._authHeaders(),
+        })
             .then((response) => {
                 if (!response.ok) {
                     throw new Error('Unable to load specimen details');
@@ -521,30 +535,75 @@
 
     _resetPhotoUpload() {
         this.photoTargetMineral = null;
+        this.photoUploadExistingPhotos = [];
+        this.photoUploadRemovedPhotoKeys = new Set();
+        this.photoUploadLoadedMineralId = null;
+        this.photoUploadLoadToken += 1;
+        this.photoUploadHasChanges = false;
         this.photoUploadForm.reset();
         this.photoFileInput.disabled = true;
         this.photoUploadSaveButton.disabled = true;
         this.photoUploadMatch.textContent = 'Enter a specimen number.';
+        this.photoUploadExistingWrap.hidden = true;
+        this.photoUploadExisting.innerHTML = '';
         this.photoUploadStatus.textContent = '';
         this.photoUploadStatus.classList.remove('error');
     }
 
     _updatePhotoUploadTarget() {
         const specimenId = this.photoSpecimenInput.value.trim().toLowerCase();
-        this.photoTargetMineral = specimenId
+        const localMineral = specimenId
             ? this.minerals.find((mineral) => String(mineral.specimenId || '').trim().toLowerCase() === specimenId)
             : null;
 
-        if (this.photoTargetMineral) {
-            this.photoUploadMatch.textContent = `Specimen: ${this.photoTargetMineral.name || 'Name not recorded'}`;
-            this.photoFileInput.disabled = false;
-        } else {
-            this.photoUploadMatch.textContent = specimenId ? 'No specimen found with that number.' : 'Enter a specimen number.';
-            this.photoFileInput.disabled = true;
-            this.photoFileInput.value = '';
+        this.photoUploadLoadToken += 1;
+        const loadToken = this.photoUploadLoadToken;
+        this.photoTargetMineral = null;
+        this.photoUploadExistingPhotos = [];
+        this.photoUploadRemovedPhotoKeys = new Set();
+        this.photoUploadLoadedMineralId = null;
+        this.photoUploadHasChanges = false;
+        this.photoUploadExistingWrap.hidden = true;
+        this.photoUploadExisting.innerHTML = '';
+        this.photoFileInput.disabled = true;
+        this.photoFileInput.value = '';
+
+        if (!specimenId) {
+            this.photoUploadMatch.textContent = 'Enter a specimen number.';
+            this._updatePhotoUploadSaveState();
+            return;
         }
 
-        this._updatePhotoUploadSaveState();
+        if (!localMineral) {
+            this.photoUploadMatch.textContent = 'No specimen found with that number.';
+            this._updatePhotoUploadSaveState();
+            return;
+        }
+
+        this.photoUploadMatch.textContent = `Loading existing photos for ${localMineral.name || 'selected specimen'}...`;
+        this._loadFullMineralForUpload(localMineral.id)
+            .then((fullMineral) => {
+                if (loadToken !== this.photoUploadLoadToken) {
+                    return;
+                }
+
+                this.photoTargetMineral = fullMineral;
+                this.photoUploadLoadedMineralId = fullMineral.id;
+                this.photoUploadExistingPhotos = this._getPhotos(fullMineral)
+                    .map((photo, index) => this._decorateUploadPhoto(photo, index));
+                this.photoUploadMatch.textContent = `Specimen: ${fullMineral.name || 'Name not recorded'}`;
+                this.photoFileInput.disabled = false;
+                this._renderPhotoUploadExistingPhotos();
+                this._updatePhotoUploadSaveState();
+            })
+            .catch((error) => {
+                if (loadToken !== this.photoUploadLoadToken) {
+                    return;
+                }
+                console.error('Error loading photos for upload:', error);
+                this.photoUploadMatch.textContent = 'Unable to load existing photos for that specimen.';
+                this._updatePhotoUploadSaveState();
+            });
     }
 
     _validatePhotoFiles() {
@@ -570,7 +629,7 @@
     }
 
     _updatePhotoUploadSaveState() {
-        this.photoUploadSaveButton.disabled = !this.photoTargetMineral || !this.photoFileInput.files.length;
+        this.photoUploadSaveButton.disabled = !this.photoTargetMineral || !this.photoUploadHasChanges;
     }
 
     _submitPhotoUpload() {
@@ -580,23 +639,22 @@
             return;
         }
 
-        if (!this.photoFileInput.files.length) {
-            this.photoUploadStatus.textContent = 'Select one or more photos.';
-            this.photoUploadStatus.classList.add('error');
-            return;
-        }
-
-        if (!this._validatePhotoFiles()) {
+        const selectedFiles = Array.from(this.photoFileInput.files);
+        if (selectedFiles.length && !this._validatePhotoFiles()) {
             this._updatePhotoUploadSaveState();
             return;
         }
 
         this.photoUploadSaveButton.disabled = true;
-        this.photoUploadStatus.textContent = 'Processing photos...';
-        Promise.all(Array.from(this.photoFileInput.files).map((file) => this._processPhoto(file)))
+        this.photoUploadStatus.textContent = selectedFiles.length ? 'Processing photos...' : 'Saving changes...';
+        Promise.all(selectedFiles.map((file) => this._processPhoto(file)))
             .then((newPhotos) => {
+                const keptExistingPhotos = this.photoUploadExistingPhotos
+                    .filter((photo) => !this.photoUploadRemovedPhotoKeys.has(photo._uploadKey))
+                    .map(({ _uploadKey, ...photo }) => photo);
+                const finalPhotos = [...keptExistingPhotos, ...newPhotos];
                 if (this.onPhotosCallback) {
-                    return this.onPhotosCallback(this.photoTargetMineral, newPhotos);
+                    return this.onPhotosCallback(this.photoTargetMineral, finalPhotos);
                 }
                 return null;
             })
@@ -644,6 +702,52 @@
             thumbSize: thumbBlob.size,
             type: 'image/webp',
         };
+    }
+
+    _decorateUploadPhoto(photo, index) {
+        const _uploadKey = `${index}:${photo.originalName || photo.name || ''}:${photo.thumbWebp || ''}:${photo.mainWebp || ''}:${photo.dataUrl || ''}`;
+        return { ...photo, _uploadKey };
+    }
+
+    _renderPhotoUploadExistingPhotos() {
+        const visiblePhotos = this.photoUploadExistingPhotos.filter((photo) => !this.photoUploadRemovedPhotoKeys.has(photo._uploadKey));
+        this.photoUploadExistingWrap.hidden = !visiblePhotos.length;
+        this.photoUploadExisting.innerHTML = visiblePhotos.map((photo) => {
+            const src = photo.thumbWebp || photo.dataUrl || photo.mainWebp || '/no_photo.png';
+            const name = photo.originalName || photo.name || 'Existing photo';
+            return `
+                <article class="photo-upload-existing-item">
+                    <img src="${this._escape(src)}" alt="${this._escape(name)}" loading="lazy">
+                    <button type="button" class="photo-upload-remove" data-photo-key="${this._escape(photo._uploadKey)}">Remove</button>
+                </article>
+            `;
+        }).join('');
+
+        this.photoUploadExisting.querySelectorAll('[data-photo-key]').forEach((button) => {
+            button.addEventListener('click', () => {
+                this.photoUploadRemovedPhotoKeys.add(button.dataset.photoKey);
+                this.photoUploadHasChanges = true;
+                this._renderPhotoUploadExistingPhotos();
+                this._updatePhotoUploadSaveState();
+            });
+        });
+    }
+
+    _loadFullMineralForUpload(id) {
+        return fetch(`/api/minerals/${id}`, {
+            headers: this._authHeaders(),
+        }).then((response) => {
+            if (!response.ok) {
+                throw new Error('Unable to load specimen details');
+            }
+            return response.json();
+        });
+    }
+
+    _authHeaders(extraHeaders = {}) {
+        return typeof window.getMineralAuthHeaders === 'function'
+            ? window.getMineralAuthHeaders(extraHeaders)
+            : extraHeaders;
     }
 
     _decodeImage(file) {

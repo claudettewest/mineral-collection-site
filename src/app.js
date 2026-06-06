@@ -385,20 +385,11 @@
         }
     });
 
-    mineralList.onPhotos(async (mineral, newPhotos) => {
-        const fullMineral = await fetchFullMineral(mineral.id);
-        const existingPhotos = normalizeMineralPhotos(fullMineral);
-        const photos = [...existingPhotos, ...newPhotos];
-        const updatedMineral = {
-            ...fullMineral,
-            photos,
-            photo: '',
-        };
-
-        const response = await apiFetch(`/api/minerals/${mineral.id}`, {
-            method: 'PUT',
+    mineralList.onPhotos(async (mineral, finalPhotos) => {
+        const response = await apiFetch(`/api/minerals/${mineral.id}/photos`, {
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(updatedMineral),
+            body: JSON.stringify({ photos: finalPhotos }),
         });
 
         if (!response.ok) {
