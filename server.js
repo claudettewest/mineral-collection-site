@@ -2,7 +2,8 @@
 
 const express = require('express');
 const bodyParser = require('body-parser');
-const BetterSqlite3 = require('better-sqlite3');
+const initSqlJs = require('sql.js');
+const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const http = require('http');
@@ -266,16 +267,23 @@ const IMPORTABLE_FIELDS = [
     'conductivity',
 ];
 const dbPath = process.env.DB_PATH || './data/app.db';
+const isMemoryDatabase = dbPath === ':memory:';
 let db;
-try {
-    db = new BetterSqlite3(dbPath);
-} catch (error) {
-    console.error('Failed to open SQLite database:', error);
-    process.exit(1);
-}
 
-try {
-    db.exec(`
+async function initializeDatabase() {
+    const SQL = await initSqlJs({
+        locateFile: (file) => path.join(__dirname, 'node_modules', 'sql.js', 'dist', file),
+    });
+    const dbDirectory = path.dirname(dbPath);
+    const dbBytes = !isMemoryDatabase && fs.existsSync(dbPath) ? fs.readFileSync(dbPath) : null;
+
+    if (!isMemoryDatabase && dbDirectory && dbDirectory !== '.') {
+        fs.mkdirSync(dbDirectory, { recursive: true });
+    }
+
+    db = dbBytes ? new SQL.Database(dbBytes) : new SQL.Database();
+
+    executeSql(`
         CREATE TABLE IF NOT EXISTS minerals (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             specimenId TEXT,
@@ -328,20 +336,97 @@ try {
             userType TEXT NOT NULL DEFAULT 'collector',
             createdAt TEXT NOT NULL
         );
-    `);
+    `, false);
     ['photos', ...EXTRA_MINERAL_FIELDS, 'ownerEmail'].forEach((field) => {
         try {
-            db.prepare(`ALTER TABLE minerals ADD COLUMN ${field} TEXT`).run();
+            runStatement(`ALTER TABLE minerals ADD COLUMN ${field} TEXT`, [], false);
         } catch (error) {
             if (!/duplicate column name/i.test(error.message)) {
                 console.error(`Error adding ${field} column:`, error);
             }
         }
     });
-    db.prepare("UPDATE minerals SET ownerEmail = ? WHERE ownerEmail IS NULL OR TRIM(ownerEmail) = ''").run(OWNER_EMAIL);
-} catch (error) {
-    console.error('Failed to initialize SQLite database:', error);
-    process.exit(1);
+    runStatement("UPDATE minerals SET ownerEmail = ? WHERE ownerEmail IS NULL OR TRIM(ownerEmail) = ''", [OWNER_EMAIL], false);
+    persistDatabase();
+}
+
+function persistDatabase() {
+    if (isMemoryDatabase) {
+        return;
+    }
+
+    const dbDirectory = path.dirname(dbPath);
+    if (dbDirectory && dbDirectory !== '.') {
+        fs.mkdirSync(dbDirectory, { recursive: true });
+    }
+    fs.writeFileSync(dbPath, Buffer.from(db.export()));
+}
+
+function executeSql(sql, persist = true) {
+    db.exec(sql);
+    if (persist) {
+        persistDatabase();
+    }
+}
+
+function bindStatement(statement, params = []) {
+    if (params.length) {
+        statement.bind(params);
+    }
+}
+
+function queryAll(sql, params = []) {
+    const statement = db.prepare(sql);
+    const rows = [];
+
+    try {
+        bindStatement(statement, params);
+        while (statement.step()) {
+            rows.push(statement.getAsObject());
+        }
+        return rows;
+    } finally {
+        statement.free();
+    }
+}
+
+function queryGet(sql, params = []) {
+    return queryAll(sql, params)[0];
+}
+
+function runStatement(sql, params = [], persist = true) {
+    const statement = db.prepare(sql);
+
+    try {
+        bindStatement(statement, params);
+        while (statement.step()) {
+            // Drain any rows SQLite may produce for statements used as writes.
+        }
+    } finally {
+        statement.free();
+    }
+
+    const changes = db.getRowsModified();
+    const lastInsertRowid = Number(queryGet('SELECT last_insert_rowid() AS id')?.id || 0);
+
+    if (persist) {
+        persistDatabase();
+    }
+
+    return { changes, lastInsertRowid };
+}
+
+function runTransaction(callback) {
+    executeSql('BEGIN TRANSACTION', false);
+    try {
+        const result = callback();
+        executeSql('COMMIT', false);
+        persistDatabase();
+        return result;
+    } catch (error) {
+        executeSql('ROLLBACK', false);
+        throw error;
+    }
 }
 
 app.use(bodyParser.json({ limit: '20mb' }));
@@ -395,10 +480,10 @@ app.post('/api/register', (req, res) => {
     const createdAt = new Date().toISOString();
 
     try {
-        const info = db.prepare(`
+        const info = runStatement(`
             INSERT INTO users (email, fullName, receiveEmails, passwordHash, passwordSalt, userType, createdAt)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run(
+        `, [
             email,
             fullName,
             receiveEmails,
@@ -406,7 +491,7 @@ app.post('/api/register', (req, res) => {
             passwordRecord.salt,
             userType,
             createdAt
-        );
+        ]);
 
         return res.status(201).json(toPublicUser({
             id: info.lastInsertRowid,
@@ -434,7 +519,7 @@ app.post('/api/login', (req, res) => {
     }
 
     try {
-        const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+        const user = queryGet('SELECT * FROM users WHERE email = ?', [email]);
 
         if (!user || !verifyPassword(password, user.passwordSalt, user.passwordHash)) {
             return res.status(401).json({ error: 'Invalid email or password' });
@@ -454,7 +539,7 @@ app.get('/api/minerals', (req, res) => {
     }
 
     try {
-        const rows = db.prepare('SELECT * FROM minerals WHERE ownerEmail = ? ORDER BY id DESC').all(ownerEmail);
+        const rows = queryAll('SELECT * FROM minerals WHERE ownerEmail = ? ORDER BY id DESC', [ownerEmail]);
         return res.json(rows.map(toMineralListRow));
     } catch (error) {
         console.error('Error fetching minerals:', error);
@@ -464,13 +549,13 @@ app.get('/api/minerals', (req, res) => {
 
 app.get('/api/minerals/next-id', (req, res) => {
     try {
-        const row = db.prepare(`
+        const row = queryGet(`
         SELECT COALESCE(
             (SELECT seq FROM sqlite_sequence WHERE name = 'minerals'),
             (SELECT MAX(id) FROM minerals),
             0
         ) + 1 AS nextId
-    `).get();
+    `);
 
         return res.json({
             nextId: row.nextId,
@@ -496,7 +581,7 @@ app.get('/api/minerals/latest', (req, res) => {
 
     const limit = Math.max(1, Math.min(10, Number(req.query.limit || 5)));
     try {
-        const rows = db.prepare('SELECT * FROM minerals WHERE ownerEmail = ? ORDER BY id DESC LIMIT ?').all(ownerEmail, limit);
+        const rows = queryAll('SELECT * FROM minerals WHERE ownerEmail = ? ORDER BY id DESC LIMIT ?', [ownerEmail, limit]);
         return res.json(rows);
     } catch (error) {
         console.error('Error fetching latest minerals:', error);
@@ -511,7 +596,7 @@ app.get('/api/minerals/:id', (req, res) => {
     }
 
     try {
-        const row = db.prepare('SELECT * FROM minerals WHERE id = ? AND ownerEmail = ?').get(req.params.id, ownerEmail);
+        const row = queryGet('SELECT * FROM minerals WHERE id = ? AND ownerEmail = ?', [req.params.id, ownerEmail]);
 
         if (!row) {
             return res.status(404).json({ error: 'Mineral not found' });
@@ -565,7 +650,7 @@ app.post('/api/gemma', (req, res) => {
     if (summaryQuery) {
         const query = addOwnerScopeToQuery(summaryQuery, ownerEmail);
         try {
-            const rows = db.prepare(query.sql).all(...query.params);
+            const rows = queryAll(query.sql, query.params);
 
             return res.json({
                 answer: formatSummaryAnswer(rows, summaryQuery),
@@ -582,7 +667,7 @@ app.post('/api/gemma', (req, res) => {
     if (countQuery) {
         const query = addOwnerScopeToQuery(countQuery, ownerEmail);
         try {
-            const row = db.prepare(query.sql).get(...query.params);
+            const row = queryGet(query.sql, query.params);
 
             return res.json({
                 answer: formatCountAnswer(row.count, countQuery.label),
@@ -599,7 +684,7 @@ app.post('/api/gemma', (req, res) => {
     if (catalogCountQuery) {
         const query = addOwnerScopeToQuery(catalogCountQuery, ownerEmail);
         try {
-            const row = db.prepare(query.sql).get(...query.params);
+            const row = queryGet(query.sql, query.params);
 
             return res.json({
                 answer: formatCountAnswer(row.count, catalogCountQuery.label),
@@ -705,7 +790,7 @@ app.delete('/api/minerals', (req, res) => {
     }
 
     try {
-        db.prepare('DELETE FROM minerals WHERE ownerEmail = ?').run(ownerEmail);
+        runStatement('DELETE FROM minerals WHERE ownerEmail = ?', [ownerEmail]);
         return res.json({ deleted: true });
     } catch (error) {
         console.error('Error deleting minerals:', error);
@@ -742,7 +827,7 @@ app.post('/api/minerals', (req, res) => {
     `;
 
     try {
-        const info = db.prepare(sql).run(
+        const info = runStatement(sql, [
             specimenId,
             name,
             type,
@@ -756,8 +841,8 @@ app.post('/api/minerals', (req, res) => {
             ...extraValues,
             ownerEmail,
             createdAt
-        );
-        const row = db.prepare('SELECT * FROM minerals WHERE id = ? AND ownerEmail = ?').get(info.lastInsertRowid, ownerEmail);
+        ]);
+        const row = queryGet('SELECT * FROM minerals WHERE id = ? AND ownerEmail = ?', [info.lastInsertRowid, ownerEmail]);
         return res.status(201).json(row);
     } catch (error) {
         console.error('Error saving mineral:', error);
@@ -802,7 +887,7 @@ app.put('/api/minerals/:id', (req, res) => {
     `;
 
     try {
-        const info = db.prepare(sql).run(
+        const info = runStatement(sql, [
             specimenId,
             name,
             type,
@@ -816,13 +901,13 @@ app.put('/api/minerals/:id', (req, res) => {
             ...extraValues,
             req.params.id,
             ownerEmail
-        );
+        ]);
 
         if (!info.changes) {
             return res.status(404).json({ error: 'Mineral not found' });
         }
 
-        const row = db.prepare('SELECT * FROM minerals WHERE id = ? AND ownerEmail = ?').get(req.params.id, ownerEmail);
+        const row = queryGet('SELECT * FROM minerals WHERE id = ? AND ownerEmail = ?', [req.params.id, ownerEmail]);
         return res.json(row);
     } catch (error) {
         console.error('Error updating mineral:', error);
@@ -842,23 +927,23 @@ app.post('/api/minerals/:id/photos', (req, res) => {
     }
 
     try {
-        const info = db.prepare(`
+        const info = runStatement(`
             UPDATE minerals
             SET photo = ?,
                 photos = ?
             WHERE id = ? AND ownerEmail = ?
-        `).run(
+        `, [
             photos[0]?.mainWebp || photos[0]?.dataUrl || '',
             JSON.stringify(photos),
             req.params.id,
             ownerEmail
-        );
+        ]);
 
         if (!info.changes) {
             return res.status(404).json({ error: 'Mineral not found' });
         }
 
-        const savedRow = db.prepare('SELECT * FROM minerals WHERE id = ? AND ownerEmail = ?').get(req.params.id, ownerEmail);
+        const savedRow = queryGet('SELECT * FROM minerals WHERE id = ? AND ownerEmail = ?', [req.params.id, ownerEmail]);
         return res.json(savedRow);
     } catch (error) {
         console.error('Error updating mineral photos:', error);
@@ -873,7 +958,7 @@ app.delete('/api/minerals/:id', (req, res) => {
     }
 
     try {
-        const info = db.prepare('DELETE FROM minerals WHERE id = ? AND ownerEmail = ?').run(req.params.id, ownerEmail);
+        const info = runStatement('DELETE FROM minerals WHERE id = ? AND ownerEmail = ?', [req.params.id, ownerEmail]);
 
         if (!info.changes) {
             return res.status(404).json({ error: 'Mineral not found' });
@@ -1273,32 +1358,32 @@ function runCatalogQuery(catalogQuery, ownerEmail, callback) {
     try {
         if ((catalogQuery.listRecords || catalogQuery.existenceQuestion || catalogQuery.describeRecords) && catalogQuery.searchTerms.length) {
             const identityQuery = addOwnerScopeToQuery(buildSearchCatalogSql(catalogQuery, ['specimenId', 'name']), ownerEmail);
-            const identityRows = db.prepare(identityQuery.sql).all(...identityQuery.params);
+            const identityRows = queryAll(identityQuery.sql, identityQuery.params);
             if (identityRows.length) {
                 callback(null, identityRows);
                 return;
             }
 
             const query = addOwnerScopeToQuery(buildCatalogSql(catalogQuery, false), ownerEmail);
-            callback(null, db.prepare(query.sql).all(...query.params));
+            callback(null, queryAll(query.sql, query.params));
             return;
         }
 
         if (catalogQuery.answerField && catalogQuery.searchTerms.length === 1) {
             const exactQuery = addOwnerScopeToQuery(buildCatalogSql(catalogQuery, true), ownerEmail);
-            const exactRows = db.prepare(exactQuery.sql).all(...exactQuery.params);
+            const exactRows = queryAll(exactQuery.sql, exactQuery.params);
             if (exactRows.length) {
                 callback(null, exactRows);
                 return;
             }
 
             const fallbackQuery = addOwnerScopeToQuery(buildCatalogSql(catalogQuery, false), ownerEmail);
-            callback(null, db.prepare(fallbackQuery.sql).all(...fallbackQuery.params));
+            callback(null, queryAll(fallbackQuery.sql, fallbackQuery.params));
             return;
         }
 
         const query = addOwnerScopeToQuery(buildCatalogSql(catalogQuery, false), ownerEmail);
-        callback(null, db.prepare(query.sql).all(...query.params));
+        callback(null, queryAll(query.sql, query.params));
     } catch (error) {
         callback(error);
     }
@@ -2266,11 +2351,10 @@ function insertCsvRecords(records, ownerEmail, callback) {
     const createdAt = new Date().toISOString();
 
     try {
-        const statement = db.prepare(sql);
-        const insertRecords = db.transaction(() => {
+        runTransaction(() => {
             records.forEach((record) => {
                 const photos = normalizePhotos(record.photos ? safeParsePhotos(record.photos) : [], record.photo);
-                statement.run(
+                runStatement(sql, [
                     record.specimenId,
                     record.name,
                     record.type,
@@ -2284,11 +2368,9 @@ function insertCsvRecords(records, ownerEmail, callback) {
                     ...getExtraMineralValues(record),
                     ownerEmail,
                     createdAt
-                );
+                ], false);
             });
         });
-
-        insertRecords();
         callback(null, records.length);
     } catch (error) {
         callback(error);
@@ -2316,4 +2398,11 @@ function startServer(port) {
     });
 }
 
-startServer(requestedPort);
+initializeDatabase()
+    .then(() => {
+        startServer(requestedPort);
+    })
+    .catch((error) => {
+        console.error('Failed to initialize SQLite database:', error);
+        process.exit(1);
+    });
