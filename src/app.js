@@ -835,6 +835,6 @@
         return match ? match[0] : null;
     }
 
-    refreshMinerals();
     showLanding();
+    refreshMinerals();
 });

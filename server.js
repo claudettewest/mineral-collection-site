@@ -200,6 +200,7 @@ const QUERY_STOPWORDS = new Set([
 ]);
 const CATALOG_REFUSAL = 'The catalog does not contain enough information to answer that.';
 const OWNER_EMAIL = 'no-reply@my-geo-collection.com';
+const DEFAULT_COLLECTION_OWNER_EMAIL = 'claudette.west@gmail.com';
 const EXTRA_MINERAL_FIELDS = [
     'variety',
     'gpsCoordinates',
@@ -346,7 +347,7 @@ async function initializeDatabase() {
             }
         }
     });
-    runStatement("UPDATE minerals SET ownerEmail = ? WHERE ownerEmail IS NULL OR TRIM(ownerEmail) = ''", [OWNER_EMAIL], false);
+    runStatement("UPDATE minerals SET ownerEmail = ? WHERE ownerEmail IS NULL OR TRIM(ownerEmail) = '' OR ownerEmail = ?", [DEFAULT_COLLECTION_OWNER_EMAIL, OWNER_EMAIL], false);
     runStatement("UPDATE users SET userType = 'admin' WHERE email = ?", [OWNER_EMAIL], false);
     persistDatabase();
 }
