@@ -1,4 +1,6 @@
-﻿const express = require('express');
+﻿require('dotenv').config();
+
+const express = require('express');
 const bodyParser = require('body-parser');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
@@ -263,7 +265,7 @@ const IMPORTABLE_FIELDS = [
     'peroxide',
     'conductivity',
 ];
-const dbPath = path.join(__dirname, 'minerals.db');
+const dbPath = process.env.DB_PATH || './data/app.db';
 const db = new sqlite3.Database(dbPath, (error) => {
     if (error) {
         console.error('Failed to open SQLite database:', error);
@@ -2333,7 +2335,7 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'src', 'index.html'));
 });
 
-const requestedPort = 3011;
+const requestedPort = process.env.PORT || 3000;
 
 function startServer(port) {
     const server = app.listen(port, () => {

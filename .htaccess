@@ -1,0 +1,4 @@
+PassengerEnabled on
+PassengerAppType node
+PassengerStartupFile server.js
+PassengerAppEnv production
