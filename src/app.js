@@ -1,4 +1,5 @@
 ﻿document.addEventListener('DOMContentLoaded', () => {
+    const SITE_ADMIN_EMAIL = 'no-reply@my-geo-collection.com';
     const mineralForm = new MineralForm();
     const mineralList = new MineralList();
     const uploadForm = new UploadForm();
@@ -9,6 +10,7 @@
     const collectionButton = document.querySelector('[data-nav="collection"]');
     const addSpecimenNavButton = document.querySelector('[data-nav="add-specimen"]');
     const aiAssistantButton = document.querySelector('[data-nav="ai-assistant"]');
+    const adminUsersButton = document.querySelector('[data-nav="admin-users"]');
     const authButton = document.querySelector('[data-nav="auth"]');
     const settingsButton = document.querySelector('[data-nav="settings"]');
     const navItems = document.querySelectorAll('.side-nav-item');
@@ -20,6 +22,7 @@
     const uploadContainer = document.getElementById('upload-container');
     const listContainer = document.getElementById('list-container');
     const gemmaContainer = document.getElementById('gemma-container');
+    const adminUsersContainer = document.getElementById('admin-users-container');
     const settingsContainer = document.getElementById('settings-container');
     const authContainer = document.getElementById('auth-container');
     const registerForm = document.querySelector('[data-auth="register-form"]');
@@ -27,6 +30,8 @@
     const registerStatus = document.querySelector('[data-auth="register-status"]');
     const loginStatus = document.querySelector('[data-auth="login-status"]');
     const currentUserStatus = document.querySelector('[data-auth="current-user"]');
+    const adminUsersRows = document.querySelector('[data-admin-users="rows"]');
+    const adminUsersStatus = document.querySelector('[data-admin-users="status"]');
     const landingWelcomeBack = document.querySelector('[data-landing="welcome-back"]');
     const themeButtons = document.querySelectorAll('[data-theme-option]');
     const savedTheme = localStorage.getItem('mineral-theme') || 'dark';
@@ -57,6 +62,10 @@
 
     aiAssistantButton.addEventListener('click', () => {
         showGemma();
+    });
+
+    adminUsersButton.addEventListener('click', () => {
+        showAdminUsers();
     });
 
     settingsButton.addEventListener('click', () => {
@@ -134,6 +143,29 @@
         }
     });
 
+    adminUsersRows.addEventListener('change', async (event) => {
+        const roleSelect = event.target.closest('[data-admin-action="role"]');
+        if (!roleSelect) {
+            return;
+        }
+
+        await updateUserRole(roleSelect.dataset.userId, roleSelect.value);
+    });
+
+    adminUsersRows.addEventListener('click', async (event) => {
+        const deleteButton = event.target.closest('[data-admin-action="delete"]');
+        if (!deleteButton) {
+            return;
+        }
+
+        const userName = deleteButton.dataset.userName || 'this user';
+        if (!window.confirm(`Delete ${userName}? This also removes their specimens.`)) {
+            return;
+        }
+
+        await deleteUser(deleteButton.dataset.userId);
+    });
+
     renderCurrentUser();
 
     function showDashboard() {
@@ -143,6 +175,7 @@
         uploadContainer.style.display = 'none';
         listContainer.style.display = 'none';
         gemmaContainer.style.display = 'none';
+        adminUsersContainer.style.display = 'none';
         settingsContainer.style.display = 'none';
         authContainer.style.display = 'none';
         setActiveNav('dashboard');
@@ -155,6 +188,7 @@
         uploadContainer.style.display = 'none';
         listContainer.style.display = 'none';
         gemmaContainer.style.display = 'none';
+        adminUsersContainer.style.display = 'none';
         settingsContainer.style.display = 'none';
         authContainer.style.display = 'none';
         setActiveNav('landing');
@@ -167,6 +201,7 @@
         uploadContainer.style.display = 'none';
         listContainer.style.display = 'none';
         gemmaContainer.style.display = 'none';
+        adminUsersContainer.style.display = 'none';
         settingsContainer.style.display = 'none';
         authContainer.style.display = 'none';
         setActiveNav('add-specimen');
@@ -179,6 +214,7 @@
         uploadContainer.style.display = '';
         listContainer.style.display = 'none';
         gemmaContainer.style.display = 'none';
+        adminUsersContainer.style.display = 'none';
         settingsContainer.style.display = 'none';
         authContainer.style.display = 'none';
     }
@@ -190,6 +226,7 @@
         uploadContainer.style.display = 'none';
         listContainer.style.display = '';
         gemmaContainer.style.display = 'none';
+        adminUsersContainer.style.display = 'none';
         settingsContainer.style.display = 'none';
         authContainer.style.display = 'none';
         setActiveNav('collection');
@@ -202,9 +239,30 @@
         uploadContainer.style.display = 'none';
         listContainer.style.display = 'none';
         gemmaContainer.style.display = '';
+        adminUsersContainer.style.display = 'none';
         settingsContainer.style.display = 'none';
         authContainer.style.display = 'none';
         setActiveNav('ai-assistant');
+    }
+
+    function showAdminUsers() {
+        const user = getCurrentUser();
+        if (!isAdminUser(user)) {
+            showAuth();
+            return;
+        }
+
+        landingContainer.style.display = 'none';
+        dashboardContainer.style.display = 'none';
+        formContainer.style.display = 'none';
+        uploadContainer.style.display = 'none';
+        listContainer.style.display = 'none';
+        gemmaContainer.style.display = 'none';
+        adminUsersContainer.style.display = '';
+        settingsContainer.style.display = 'none';
+        authContainer.style.display = 'none';
+        setActiveNav('admin-users');
+        loadAdminUsers();
     }
 
     function showSettings() {
@@ -214,6 +272,7 @@
         uploadContainer.style.display = 'none';
         listContainer.style.display = 'none';
         gemmaContainer.style.display = 'none';
+        adminUsersContainer.style.display = 'none';
         settingsContainer.style.display = '';
         authContainer.style.display = 'none';
         setActiveNav('settings');
@@ -226,6 +285,7 @@
         uploadContainer.style.display = 'none';
         listContainer.style.display = 'none';
         gemmaContainer.style.display = 'none';
+        adminUsersContainer.style.display = 'none';
         settingsContainer.style.display = 'none';
         authContainer.style.display = '';
         setActiveNav('auth');
@@ -268,17 +328,34 @@
     }
 
     function saveCurrentUser(user) {
-        localStorage.setItem('mineral-user', JSON.stringify(user));
+        localStorage.setItem('mineral-user', JSON.stringify(normalizeCurrentUser(user)));
         renderCurrentUser();
         refreshMinerals();
     }
 
     function getCurrentUser() {
         try {
-            return JSON.parse(localStorage.getItem('mineral-user') || 'null');
+            const user = JSON.parse(localStorage.getItem('mineral-user') || 'null');
+            return user ? normalizeCurrentUser(user) : null;
         } catch (error) {
             return null;
         }
+    }
+
+    function normalizeCurrentUser(user) {
+        if (!user) {
+            return null;
+        }
+
+        return {
+            ...user,
+            email: String(user.email || '').trim().toLowerCase(),
+            userType: String(user.email || '').trim().toLowerCase() === SITE_ADMIN_EMAIL ? 'admin' : user.userType,
+        };
+    }
+
+    function isAdminUser(user) {
+        return Boolean(user) && (user.email === SITE_ADMIN_EMAIL || user.userType === 'admin');
     }
 
     function renderCurrentUser() {
@@ -288,11 +365,120 @@
             : 'No user is logged in.';
         landingWelcomeBack.hidden = !user;
         landingWelcomeBack.textContent = user ? `Welcome back, ${user.fullName}.` : '';
+        adminUsersButton.hidden = !isAdminUser(user);
+        if (!isAdminUser(user) && adminUsersContainer.style.display !== 'none') {
+            showLanding();
+        }
+    }
+
+    async function loadAdminUsers() {
+        setAdminUsersStatus('Loading users...');
+        adminUsersRows.innerHTML = '<tr><td colspan="5">Loading users...</td></tr>';
+
+        try {
+            const response = await apiFetch('/api/admin/users');
+            const users = await response.json().catch(() => []);
+            if (!response.ok) {
+                throw new Error(users.error || 'Unable to load users');
+            }
+
+            renderAdminUsers(users);
+            setAdminUsersStatus(`${users.length} user${users.length === 1 ? '' : 's'} loaded.`, 'success');
+        } catch (error) {
+            adminUsersRows.innerHTML = '<tr><td colspan="5">Unable to load users.</td></tr>';
+            setAdminUsersStatus(error.message, 'error');
+        }
+    }
+
+    function renderAdminUsers(users) {
+        const currentUser = getCurrentUser();
+        if (!users.length) {
+            adminUsersRows.innerHTML = '<tr><td colspan="5">No users found.</td></tr>';
+            return;
+        }
+
+        adminUsersRows.innerHTML = users.map((user) => {
+            const isSiteAdmin = user.email === SITE_ADMIN_EMAIL;
+            const isCurrentUser = currentUser?.email === user.email;
+            const createdAt = user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '';
+            const roleSelect = `
+                <select data-admin-action="role" data-user-id="${escapeHtml(user.id)}" ${isSiteAdmin ? 'disabled' : ''}>
+                    <option value="collector" ${user.userType === 'collector' ? 'selected' : ''}>Collector</option>
+                    <option value="admin" ${user.userType === 'admin' ? 'selected' : ''}>Admin</option>
+                </select>
+            `;
+            const deleteDisabled = isSiteAdmin || isCurrentUser;
+
+            return `
+                <tr>
+                    <td>${escapeHtml(user.fullName || '')}</td>
+                    <td>${escapeHtml(user.email || '')}</td>
+                    <td>${roleSelect}</td>
+                    <td>${escapeHtml(createdAt)}</td>
+                    <td>
+                        <button type="button" class="danger-button" data-admin-action="delete" data-user-id="${escapeHtml(user.id)}" data-user-name="${escapeHtml(user.fullName || user.email || 'this user')}" ${deleteDisabled ? 'disabled' : ''}>Delete</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    async function updateUserRole(userId, userType) {
+        setAdminUsersStatus('Updating role...');
+        try {
+            const response = await apiFetch(`/api/admin/users/${encodeURIComponent(userId)}/role`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userType }),
+            });
+            const body = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(body.error || 'Unable to update role');
+            }
+
+            setAdminUsersStatus('Role updated.', 'success');
+            loadAdminUsers();
+        } catch (error) {
+            setAdminUsersStatus(error.message, 'error');
+            loadAdminUsers();
+        }
+    }
+
+    async function deleteUser(userId) {
+        setAdminUsersStatus('Deleting user...');
+        try {
+            const response = await apiFetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
+                method: 'DELETE',
+            });
+            if (!response.ok) {
+                const body = await response.json().catch(() => ({}));
+                throw new Error(body.error || 'Unable to delete user');
+            }
+
+            setAdminUsersStatus('User deleted.', 'success');
+            loadAdminUsers();
+        } catch (error) {
+            setAdminUsersStatus(error.message, 'error');
+        }
+    }
+
+    function setAdminUsersStatus(message, state = '') {
+        adminUsersStatus.textContent = message;
+        adminUsersStatus.dataset.state = state;
     }
 
     function setAuthStatus(element, message, state = '') {
         element.textContent = message;
         element.dataset.state = state;
+    }
+
+    function escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
     function getAuthHeaders(extraHeaders = {}) {

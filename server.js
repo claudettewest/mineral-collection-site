@@ -199,7 +199,7 @@ const QUERY_STOPWORDS = new Set([
     'you',
 ]);
 const CATALOG_REFUSAL = 'The catalog does not contain enough information to answer that.';
-const OWNER_EMAIL = 'claudette.west@gmail.com';
+const OWNER_EMAIL = 'no-reply@my-geo-collection.com';
 const EXTRA_MINERAL_FIELDS = [
     'variety',
     'gpsCoordinates',
@@ -347,6 +347,7 @@ async function initializeDatabase() {
         }
     });
     runStatement("UPDATE minerals SET ownerEmail = ? WHERE ownerEmail IS NULL OR TRIM(ownerEmail) = ''", [OWNER_EMAIL], false);
+    runStatement("UPDATE users SET userType = 'admin' WHERE email = ?", [OWNER_EMAIL], false);
     persistDatabase();
 }
 
@@ -528,6 +529,85 @@ app.post('/api/login', (req, res) => {
         return res.json(toPublicUser(user));
     } catch (error) {
         console.error('Error loading user:', error);
+        return res.status(500).json({ error: 'Database error' });
+    }
+});
+
+app.get('/api/admin/users', (req, res) => {
+    if (!requireAdmin(req, res)) {
+        return;
+    }
+
+    try {
+        const users = queryAll(`
+            SELECT id, email, fullName, receiveEmails, userType, createdAt
+            FROM users
+            ORDER BY createdAt DESC, id DESC
+        `);
+        return res.json(users.map(toPublicUser));
+    } catch (error) {
+        console.error('Error loading users:', error);
+        return res.status(500).json({ error: 'Database error' });
+    }
+});
+
+app.put('/api/admin/users/:id/role', (req, res) => {
+    const adminUser = requireAdmin(req, res);
+    if (!adminUser) {
+        return;
+    }
+
+    const user = queryGet('SELECT * FROM users WHERE id = ?', [req.params.id]);
+    if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+    }
+
+    const requestedRole = String(req.body.userType || '').trim();
+    if (!['admin', 'collector'].includes(requestedRole)) {
+        return res.status(400).json({ error: 'Role must be admin or collector' });
+    }
+
+    if (normalizeEmail(user.email) === OWNER_EMAIL && requestedRole !== 'admin') {
+        return res.status(400).json({ error: 'The site administrator role cannot be changed' });
+    }
+
+    try {
+        runStatement('UPDATE users SET userType = ? WHERE id = ?', [requestedRole, req.params.id]);
+        const savedUser = queryGet('SELECT * FROM users WHERE id = ?', [req.params.id]);
+        return res.json(toPublicUser(savedUser));
+    } catch (error) {
+        console.error('Error updating user role:', error);
+        return res.status(500).json({ error: 'Database error' });
+    }
+});
+
+app.delete('/api/admin/users/:id', (req, res) => {
+    const adminUser = requireAdmin(req, res);
+    if (!adminUser) {
+        return;
+    }
+
+    const user = queryGet('SELECT * FROM users WHERE id = ?', [req.params.id]);
+    if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (normalizeEmail(user.email) === OWNER_EMAIL) {
+        return res.status(400).json({ error: 'The site administrator account cannot be deleted' });
+    }
+
+    if (normalizeEmail(user.email) === normalizeEmail(adminUser.email)) {
+        return res.status(400).json({ error: 'You cannot delete your own account' });
+    }
+
+    try {
+        runTransaction(() => {
+            runStatement('DELETE FROM minerals WHERE ownerEmail = ?', [user.email], false);
+            runStatement('DELETE FROM users WHERE id = ?', [req.params.id], false);
+        });
+        return res.status(204).send();
+    } catch (error) {
+        console.error('Error deleting user:', error);
         return res.status(500).json({ error: 'Database error' });
     }
 });
@@ -1025,6 +1105,30 @@ function getRequestUserEmail(req) {
     return normalizeEmail(req.get('X-User-Email'));
 }
 
+function getRequestUser(req) {
+    const email = getRequestUserEmail(req);
+    return email ? queryGet('SELECT * FROM users WHERE email = ?', [email]) : null;
+}
+
+function isAdminUser(user) {
+    return Boolean(user) && (normalizeEmail(user.email) === OWNER_EMAIL || user.userType === 'admin');
+}
+
+function requireAdmin(req, res) {
+    const user = getRequestUser(req);
+    if (!user) {
+        res.status(401).json({ error: 'Login is required' });
+        return null;
+    }
+
+    if (!isAdminUser(user)) {
+        res.status(403).json({ error: 'Site administrator access is required' });
+        return null;
+    }
+
+    return user;
+}
+
 function isValidEmail(value) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
@@ -1053,7 +1157,7 @@ function toPublicUser(user) {
         email: user.email,
         fullName: user.fullName,
         receiveEmails: Boolean(user.receiveEmails),
-        userType: getUserType(user.email),
+        userType: normalizeEmail(user.email) === OWNER_EMAIL ? 'admin' : user.userType || 'collector',
         createdAt: user.createdAt,
     };
 }

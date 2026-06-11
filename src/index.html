@@ -21,6 +21,7 @@
                 <button type="button" class="side-nav-item" data-nav="add-specimen">Add Specimen</button>
                 <button type="button" class="side-nav-item">Search</button>
                 <button type="button" class="side-nav-item" data-nav="ai-assistant">AI Assistant</button>
+                <button type="button" class="side-nav-item" data-nav="admin-users" hidden>Manage Users</button>
                 <button type="button" class="side-nav-item" data-nav="auth">Login / Register</button>
                 <button type="button" class="side-nav-item settings-nav-item" data-nav="settings" aria-label="Settings" title="Settings">
                     <span class="settings-icon" aria-hidden="true">&#9881;</span>
@@ -129,6 +130,32 @@
                 <section id="upload-container" style="display:none;"></section>
                 <section id="list-container" style="display:none;"></section>
                 <section id="gemma-container" style="display:none;"></section>
+                <section id="admin-users-container" style="display:none;">
+                    <div class="admin-page">
+                        <div class="admin-header">
+                            <h2>Manage Users</h2>
+                            <p data-admin-users="status" role="status"></p>
+                        </div>
+                        <div class="admin-users-table-wrap">
+                            <table class="admin-users-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Email</th>
+                                        <th>Role</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody data-admin-users="rows">
+                                    <tr>
+                                        <td colspan="5">No users loaded.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
                 <section id="settings-container" style="display:none;">
                     <div class="settings-page">
                         <h2>Settings</h2>

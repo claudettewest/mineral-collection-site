@@ -50,6 +50,10 @@
     box-sizing: border-box;
 }
 
+[hidden] {
+    display: none !important;
+}
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background:
@@ -170,17 +174,20 @@ body {
     gap: 18px;
 }
 
-.auth-page {
+.auth-page,
+.admin-page {
     display: grid;
     gap: 18px;
 }
 
-.auth-header {
+.auth-header,
+.admin-header {
     display: grid;
     gap: 6px;
 }
 
-.auth-header p {
+.auth-header p,
+.admin-header p {
     margin: 0;
     color: var(--muted);
 }
@@ -228,6 +235,72 @@ body {
 
 .auth-status[data-state="error"] {
     color: var(--danger-hover);
+}
+
+.admin-header p[data-state="success"] {
+    color: var(--accent-strong);
+}
+
+.admin-header p[data-state="error"] {
+    color: var(--danger-hover);
+}
+
+.admin-users-table-wrap {
+    overflow-x: auto;
+    border-radius: 8px;
+    background: var(--panel-strong);
+    box-shadow: var(--small-raised-shadow);
+}
+
+.admin-users-table {
+    width: 100%;
+    min-width: 760px;
+    border-collapse: collapse;
+}
+
+.admin-users-table th,
+.admin-users-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid rgb(255 255 255 / 0.08);
+    text-align: left;
+    vertical-align: middle;
+}
+
+:root[data-theme="light"] .admin-users-table th,
+:root[data-theme="light"] .admin-users-table td {
+    border-bottom-color: rgb(47 52 58 / 0.1);
+}
+
+.admin-users-table th {
+    color: var(--accent);
+    font-size: 0.82rem;
+    text-transform: uppercase;
+}
+
+.admin-users-table select {
+    min-width: 130px;
+    padding: 9px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--panel-soft);
+    color: var(--text);
+    box-shadow: var(--inset-shadow);
+}
+
+.danger-button {
+    background: var(--danger);
+    color: var(--text);
+}
+
+.danger-button:hover,
+.danger-button:focus-visible {
+    background: var(--danger-hover);
+}
+
+.danger-button:disabled,
+.admin-users-table select:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
 }
 
 .settings-panel {
