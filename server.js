@@ -2,7 +2,7 @@
 
 const express = require('express');
 const bodyParser = require('body-parser');
-const sqlite3 = require('sqlite3').verbose();
+const BetterSqlite3 = require('better-sqlite3');
 const path = require('path');
 const multer = require('multer');
 const http = require('http');
@@ -266,15 +266,16 @@ const IMPORTABLE_FIELDS = [
     'conductivity',
 ];
 const dbPath = process.env.DB_PATH || './data/app.db';
-const db = new sqlite3.Database(dbPath, (error) => {
-    if (error) {
-        console.error('Failed to open SQLite database:', error);
-        process.exit(1);
-    }
-});
+let db;
+try {
+    db = new BetterSqlite3(dbPath);
+} catch (error) {
+    console.error('Failed to open SQLite database:', error);
+    process.exit(1);
+}
 
-db.serialize(() => {
-    db.run(`
+try {
+    db.exec(`
         CREATE TABLE IF NOT EXISTS minerals (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             specimenId TEXT,
@@ -315,9 +316,8 @@ db.serialize(() => {
             dana TEXT,
             ownerEmail TEXT,
             createdAt TEXT
-        )
-    `);
-    db.run(`
+        );
+
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT UNIQUE NOT NULL,
@@ -327,20 +327,22 @@ db.serialize(() => {
             passwordSalt TEXT NOT NULL,
             userType TEXT NOT NULL DEFAULT 'collector',
             createdAt TEXT NOT NULL
-        )
+        );
     `);
     ['photos', ...EXTRA_MINERAL_FIELDS, 'ownerEmail'].forEach((field) => {
-        db.run(`ALTER TABLE minerals ADD COLUMN ${field} TEXT`, (error) => {
-            if (error && !/duplicate column name/i.test(error.message)) {
+        try {
+            db.prepare(`ALTER TABLE minerals ADD COLUMN ${field} TEXT`).run();
+        } catch (error) {
+            if (!/duplicate column name/i.test(error.message)) {
                 console.error(`Error adding ${field} column:`, error);
             }
-        });
+        }
     });
-    db.run(
-        "UPDATE minerals SET ownerEmail = ? WHERE ownerEmail IS NULL OR TRIM(ownerEmail) = ''",
-        [OWNER_EMAIL]
-    );
-});
+    db.prepare("UPDATE minerals SET ownerEmail = ? WHERE ownerEmail IS NULL OR TRIM(ownerEmail) = ''").run(OWNER_EMAIL);
+} catch (error) {
+    console.error('Failed to initialize SQLite database:', error);
+    process.exit(1);
+}
 
 app.use(bodyParser.json({ limit: '20mb' }));
 app.use('/api', (req, res, next) => {
@@ -392,35 +394,35 @@ app.post('/api/register', (req, res) => {
     const userType = getUserType(email);
     const createdAt = new Date().toISOString();
 
-    db.run(`
-        INSERT INTO users (email, fullName, receiveEmails, passwordHash, passwordSalt, userType, createdAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, [
-        email,
-        fullName,
-        receiveEmails,
-        passwordRecord.hash,
-        passwordRecord.salt,
-        userType,
-        createdAt,
-    ], function onUserSaved(error) {
-        if (error) {
-            if (/UNIQUE constraint failed/i.test(error.message)) {
-                return res.status(409).json({ error: 'That email address is already registered' });
-            }
-            console.error('Error registering user:', error);
-            return res.status(500).json({ error: 'Database error' });
-        }
+    try {
+        const info = db.prepare(`
+            INSERT INTO users (email, fullName, receiveEmails, passwordHash, passwordSalt, userType, createdAt)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            email,
+            fullName,
+            receiveEmails,
+            passwordRecord.hash,
+            passwordRecord.salt,
+            userType,
+            createdAt
+        );
 
-        res.status(201).json(toPublicUser({
-            id: this.lastID,
+        return res.status(201).json(toPublicUser({
+            id: info.lastInsertRowid,
             email,
             fullName,
             receiveEmails,
             userType,
             createdAt,
         }));
-    });
+    } catch (error) {
+        if (/UNIQUE constraint failed/i.test(error.message)) {
+            return res.status(409).json({ error: 'That email address is already registered' });
+        }
+        console.error('Error registering user:', error);
+        return res.status(500).json({ error: 'Database error' });
+    }
 });
 
 app.post('/api/login', (req, res) => {
@@ -431,18 +433,18 @@ app.post('/api/login', (req, res) => {
         return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    db.get('SELECT * FROM users WHERE email = ?', [email], (error, user) => {
-        if (error) {
-            console.error('Error loading user:', error);
-            return res.status(500).json({ error: 'Database error' });
-        }
+    try {
+        const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
 
         if (!user || !verifyPassword(password, user.passwordSalt, user.passwordHash)) {
             return res.status(401).json({ error: 'Invalid email or password' });
         }
 
-        res.json(toPublicUser(user));
-    });
+        return res.json(toPublicUser(user));
+    } catch (error) {
+        console.error('Error loading user:', error);
+        return res.status(500).json({ error: 'Database error' });
+    }
 });
 
 app.get('/api/minerals', (req, res) => {
@@ -451,33 +453,33 @@ app.get('/api/minerals', (req, res) => {
         return res.json([]);
     }
 
-    db.all('SELECT * FROM minerals WHERE ownerEmail = ? ORDER BY id DESC', [ownerEmail], (error, rows) => {
-        if (error) {
-            console.error('Error fetching minerals:', error);
-            return res.status(500).json({ error: 'Database error' });
-        }
-        res.json(rows.map(toMineralListRow));
-    });
+    try {
+        const rows = db.prepare('SELECT * FROM minerals WHERE ownerEmail = ? ORDER BY id DESC').all(ownerEmail);
+        return res.json(rows.map(toMineralListRow));
+    } catch (error) {
+        console.error('Error fetching minerals:', error);
+        return res.status(500).json({ error: 'Database error' });
+    }
 });
 
 app.get('/api/minerals/next-id', (req, res) => {
-    db.get(`
+    try {
+        const row = db.prepare(`
         SELECT COALESCE(
             (SELECT seq FROM sqlite_sequence WHERE name = 'minerals'),
             (SELECT MAX(id) FROM minerals),
             0
         ) + 1 AS nextId
-    `, (error, row) => {
-        if (error) {
-            console.error('Error fetching next mineral ID:', error);
-            return res.status(500).json({ error: 'Database error' });
-        }
+    `).get();
 
-        res.json({
+        return res.json({
             nextId: row.nextId,
             formattedId: formatDisplayId(row.nextId),
         });
-    });
+    } catch (error) {
+        console.error('Error fetching next mineral ID:', error);
+        return res.status(500).json({ error: 'Database error' });
+    }
 });
 
 app.get('/api/minerals/csv-template', (req, res) => {
@@ -493,14 +495,13 @@ app.get('/api/minerals/latest', (req, res) => {
     }
 
     const limit = Math.max(1, Math.min(10, Number(req.query.limit || 5)));
-    db.all('SELECT * FROM minerals WHERE ownerEmail = ? ORDER BY id DESC LIMIT ?', [ownerEmail, limit], (error, rows) => {
-        if (error) {
-            console.error('Error fetching latest minerals:', error);
-            return res.status(500).json({ error: 'Database error' });
-        }
-
-        res.json(rows);
-    });
+    try {
+        const rows = db.prepare('SELECT * FROM minerals WHERE ownerEmail = ? ORDER BY id DESC LIMIT ?').all(ownerEmail, limit);
+        return res.json(rows);
+    } catch (error) {
+        console.error('Error fetching latest minerals:', error);
+        return res.status(500).json({ error: 'Database error' });
+    }
 });
 
 app.get('/api/minerals/:id', (req, res) => {
@@ -509,18 +510,18 @@ app.get('/api/minerals/:id', (req, res) => {
         return res.status(401).json({ error: 'Login is required' });
     }
 
-    db.get('SELECT * FROM minerals WHERE id = ? AND ownerEmail = ?', [req.params.id, ownerEmail], (error, row) => {
-        if (error) {
-            console.error('Error fetching mineral:', error);
-            return res.status(500).json({ error: 'Database error' });
-        }
+    try {
+        const row = db.prepare('SELECT * FROM minerals WHERE id = ? AND ownerEmail = ?').get(req.params.id, ownerEmail);
 
         if (!row) {
             return res.status(404).json({ error: 'Mineral not found' });
         }
 
-        res.json(row);
-    });
+        return res.json(row);
+    } catch (error) {
+        console.error('Error fetching mineral:', error);
+        return res.status(500).json({ error: 'Database error' });
+    }
 });
 
 app.get('/api/health', (req, res) => {
@@ -563,51 +564,51 @@ app.post('/api/gemma', (req, res) => {
     const summaryQuery = getSummaryQuery(prompt);
     if (summaryQuery) {
         const query = addOwnerScopeToQuery(summaryQuery, ownerEmail);
-        db.all(query.sql, query.params, (error, rows) => {
-            if (error) {
-                console.error('Error answering summary question:', error);
-                return res.status(500).json({ error: 'Database error' });
-            }
+        try {
+            const rows = db.prepare(query.sql).all(...query.params);
 
             return res.json({
                 answer: formatSummaryAnswer(rows, summaryQuery),
                 model: 'SQLite',
             });
-        });
+        } catch (error) {
+            console.error('Error answering summary question:', error);
+            return res.status(500).json({ error: 'Database error' });
+        }
         return;
     }
 
     const countQuery = getCountQuery(prompt);
     if (countQuery) {
         const query = addOwnerScopeToQuery(countQuery, ownerEmail);
-        db.get(query.sql, query.params, (error, row) => {
-            if (error) {
-                console.error('Error answering count question:', error);
-                return res.status(500).json({ error: 'Database error' });
-            }
+        try {
+            const row = db.prepare(query.sql).get(...query.params);
 
             return res.json({
                 answer: formatCountAnswer(row.count, countQuery.label),
                 model: 'SQLite',
             });
-        });
+        } catch (error) {
+            console.error('Error answering count question:', error);
+            return res.status(500).json({ error: 'Database error' });
+        }
         return;
     }
 
     const catalogCountQuery = getCatalogCountQuery(prompt);
     if (catalogCountQuery) {
         const query = addOwnerScopeToQuery(catalogCountQuery, ownerEmail);
-        db.get(query.sql, query.params, (error, row) => {
-            if (error) {
-                console.error('Error answering catalog count question:', error);
-                return res.status(500).json({ error: 'Database error' });
-            }
+        try {
+            const row = db.prepare(query.sql).get(...query.params);
 
             return res.json({
                 answer: formatCountAnswer(row.count, catalogCountQuery.label),
                 model: 'SQLite',
             });
-        });
+        } catch (error) {
+            console.error('Error answering catalog count question:', error);
+            return res.status(500).json({ error: 'Database error' });
+        }
         return;
     }
 
@@ -703,14 +704,13 @@ app.delete('/api/minerals', (req, res) => {
         return res.status(401).json({ error: 'Login is required' });
     }
 
-    db.run('DELETE FROM minerals WHERE ownerEmail = ?', [ownerEmail], (deleteError) => {
-        if (deleteError) {
-            console.error('Error deleting minerals:', deleteError);
-            return res.status(500).json({ error: 'Database error' });
-        }
-
-        res.json({ deleted: true });
-    });
+    try {
+        db.prepare('DELETE FROM minerals WHERE ownerEmail = ?').run(ownerEmail);
+        return res.json({ deleted: true });
+    } catch (error) {
+        console.error('Error deleting minerals:', error);
+        return res.status(500).json({ error: 'Database error' });
+    }
 });
 
 app.post('/api/minerals', (req, res) => {
@@ -741,34 +741,28 @@ app.post('/api/minerals', (req, res) => {
         ) VALUES (${Array.from({ length: 12 + EXTRA_MINERAL_FIELDS.length }, () => '?').join(', ')})
     `;
 
-    db.run(sql, [
-        specimenId,
-        name,
-        type,
-        group,
-        subgroup,
-        date,
-        origin,
-        description,
-        photos[0]?.dataUrl || '',
-        JSON.stringify(photos),
-        ...extraValues,
-        ownerEmail,
-        createdAt,
-    ], function (error) {
-        if (error) {
-            console.error('Error saving mineral:', error);
-            return res.status(500).json({ error: 'Database error' });
-        }
-
-        db.get('SELECT * FROM minerals WHERE id = ? AND ownerEmail = ?', [this.lastID, ownerEmail], (err, row) => {
-            if (err) {
-                console.error('Error fetching saved mineral:', err);
-                return res.status(500).json({ error: 'Database error' });
-            }
-            res.status(201).json(row);
-        });
-    });
+    try {
+        const info = db.prepare(sql).run(
+            specimenId,
+            name,
+            type,
+            group,
+            subgroup,
+            date,
+            origin,
+            description,
+            photos[0]?.dataUrl || '',
+            JSON.stringify(photos),
+            ...extraValues,
+            ownerEmail,
+            createdAt
+        );
+        const row = db.prepare('SELECT * FROM minerals WHERE id = ? AND ownerEmail = ?').get(info.lastInsertRowid, ownerEmail);
+        return res.status(201).json(row);
+    } catch (error) {
+        console.error('Error saving mineral:', error);
+        return res.status(500).json({ error: 'Database error' });
+    }
 });
 
 app.put('/api/minerals/:id', (req, res) => {
@@ -807,38 +801,33 @@ app.put('/api/minerals/:id', (req, res) => {
         WHERE id = ? AND ownerEmail = ?
     `;
 
-    db.run(sql, [
-        specimenId,
-        name,
-        type,
-        group,
-        subgroup,
-        date,
-        origin,
-        description,
-        photos[0]?.dataUrl || '',
-        JSON.stringify(photos),
-        ...extraValues,
-        req.params.id,
-        ownerEmail,
-    ], function (error) {
-        if (error) {
-            console.error('Error updating mineral:', error);
-            return res.status(500).json({ error: 'Database error' });
-        }
+    try {
+        const info = db.prepare(sql).run(
+            specimenId,
+            name,
+            type,
+            group,
+            subgroup,
+            date,
+            origin,
+            description,
+            photos[0]?.dataUrl || '',
+            JSON.stringify(photos),
+            ...extraValues,
+            req.params.id,
+            ownerEmail
+        );
 
-        if (!this.changes) {
+        if (!info.changes) {
             return res.status(404).json({ error: 'Mineral not found' });
         }
 
-        db.get('SELECT * FROM minerals WHERE id = ? AND ownerEmail = ?', [req.params.id, ownerEmail], (err, row) => {
-            if (err) {
-                console.error('Error fetching updated mineral:', err);
-                return res.status(500).json({ error: 'Database error' });
-            }
-            res.json(row);
-        });
-    });
+        const row = db.prepare('SELECT * FROM minerals WHERE id = ? AND ownerEmail = ?').get(req.params.id, ownerEmail);
+        return res.json(row);
+    } catch (error) {
+        console.error('Error updating mineral:', error);
+        return res.status(500).json({ error: 'Database error' });
+    }
 });
 
 app.post('/api/minerals/:id/photos', (req, res) => {
@@ -852,39 +841,29 @@ app.post('/api/minerals/:id/photos', (req, res) => {
         return res.status(400).json({ error: `${oversizedPhoto.originalName || oversizedPhoto.name || 'Photo'} exceeds the 50 MB limit` });
     }
 
-    db.run(
-        `
+    try {
+        const info = db.prepare(`
             UPDATE minerals
             SET photo = ?,
                 photos = ?
             WHERE id = ? AND ownerEmail = ?
-        `,
-        [
+        `).run(
             photos[0]?.mainWebp || photos[0]?.dataUrl || '',
             JSON.stringify(photos),
             req.params.id,
-            ownerEmail,
-        ],
-        function (updateError) {
-            if (updateError) {
-                console.error('Error updating mineral photos:', updateError);
-                return res.status(500).json({ error: 'Database error' });
-            }
+            ownerEmail
+        );
 
-            if (!this.changes) {
-                return res.status(404).json({ error: 'Mineral not found' });
-            }
-
-            db.get('SELECT * FROM minerals WHERE id = ? AND ownerEmail = ?', [req.params.id, ownerEmail], (fetchError, savedRow) => {
-                if (fetchError) {
-                    console.error('Error fetching updated mineral photos:', fetchError);
-                    return res.status(500).json({ error: 'Database error' });
-                }
-
-                res.json(savedRow);
-            });
+        if (!info.changes) {
+            return res.status(404).json({ error: 'Mineral not found' });
         }
-    );
+
+        const savedRow = db.prepare('SELECT * FROM minerals WHERE id = ? AND ownerEmail = ?').get(req.params.id, ownerEmail);
+        return res.json(savedRow);
+    } catch (error) {
+        console.error('Error updating mineral photos:', error);
+        return res.status(500).json({ error: 'Database error' });
+    }
 });
 
 app.delete('/api/minerals/:id', (req, res) => {
@@ -893,18 +872,18 @@ app.delete('/api/minerals/:id', (req, res) => {
         return res.status(401).json({ error: 'Login is required' });
     }
 
-    db.run('DELETE FROM minerals WHERE id = ? AND ownerEmail = ?', [req.params.id, ownerEmail], function (error) {
-        if (error) {
-            console.error('Error deleting mineral:', error);
-            return res.status(500).json({ error: 'Database error' });
-        }
+    try {
+        const info = db.prepare('DELETE FROM minerals WHERE id = ? AND ownerEmail = ?').run(req.params.id, ownerEmail);
 
-        if (!this.changes) {
+        if (!info.changes) {
             return res.status(404).json({ error: 'Mineral not found' });
         }
 
-        res.status(204).send();
-    });
+        return res.status(204).send();
+    } catch (error) {
+        console.error('Error deleting mineral:', error);
+        return res.status(500).json({ error: 'Database error' });
+    }
 });
 
 function normalizePhotos(photos, fallbackPhoto) {
@@ -1291,36 +1270,38 @@ function getSearchFieldsForQuery(answerField) {
 }
 
 function runCatalogQuery(catalogQuery, ownerEmail, callback) {
-    if ((catalogQuery.listRecords || catalogQuery.existenceQuestion || catalogQuery.describeRecords) && catalogQuery.searchTerms.length) {
-        const identityQuery = addOwnerScopeToQuery(buildSearchCatalogSql(catalogQuery, ['specimenId', 'name']), ownerEmail);
-        db.all(identityQuery.sql, identityQuery.params, (identityError, identityRows) => {
-            if (identityError || identityRows.length) {
-                callback(identityError, identityRows);
+    try {
+        if ((catalogQuery.listRecords || catalogQuery.existenceQuestion || catalogQuery.describeRecords) && catalogQuery.searchTerms.length) {
+            const identityQuery = addOwnerScopeToQuery(buildSearchCatalogSql(catalogQuery, ['specimenId', 'name']), ownerEmail);
+            const identityRows = db.prepare(identityQuery.sql).all(...identityQuery.params);
+            if (identityRows.length) {
+                callback(null, identityRows);
                 return;
             }
 
             const query = addOwnerScopeToQuery(buildCatalogSql(catalogQuery, false), ownerEmail);
-            db.all(query.sql, query.params, callback);
-        });
-        return;
-    }
+            callback(null, db.prepare(query.sql).all(...query.params));
+            return;
+        }
 
-    if (catalogQuery.answerField && catalogQuery.searchTerms.length === 1) {
-        const exactQuery = addOwnerScopeToQuery(buildCatalogSql(catalogQuery, true), ownerEmail);
-        db.all(exactQuery.sql, exactQuery.params, (exactError, exactRows) => {
-            if (exactError || exactRows.length) {
-                callback(exactError, exactRows);
+        if (catalogQuery.answerField && catalogQuery.searchTerms.length === 1) {
+            const exactQuery = addOwnerScopeToQuery(buildCatalogSql(catalogQuery, true), ownerEmail);
+            const exactRows = db.prepare(exactQuery.sql).all(...exactQuery.params);
+            if (exactRows.length) {
+                callback(null, exactRows);
                 return;
             }
 
             const fallbackQuery = addOwnerScopeToQuery(buildCatalogSql(catalogQuery, false), ownerEmail);
-            db.all(fallbackQuery.sql, fallbackQuery.params, callback);
-        });
-        return;
-    }
+            callback(null, db.prepare(fallbackQuery.sql).all(...fallbackQuery.params));
+            return;
+        }
 
-    const query = addOwnerScopeToQuery(buildCatalogSql(catalogQuery, false), ownerEmail);
-    db.all(query.sql, query.params, callback);
+        const query = addOwnerScopeToQuery(buildCatalogSql(catalogQuery, false), ownerEmail);
+        callback(null, db.prepare(query.sql).all(...query.params));
+    } catch (error) {
+        callback(error);
+    }
 }
 
 function addOwnerScopeToQuery(query, ownerEmail) {
@@ -2284,47 +2265,34 @@ function insertCsvRecords(records, ownerEmail, callback) {
     `;
     const createdAt = new Date().toISOString();
 
-    db.serialize(() => {
-        db.run('BEGIN TRANSACTION');
+    try {
         const statement = db.prepare(sql);
-        let failed = false;
-
-        records.forEach((record) => {
-            if (failed) {
-                return;
-            }
-
-            const photos = normalizePhotos(record.photos ? safeParsePhotos(record.photos) : [], record.photo);
-            statement.run([
-                record.specimenId,
-                record.name,
-                record.type,
-                record.groupName,
-                record.subgroup,
-                record.date,
-                record.origin,
-                record.description,
-                photos[0]?.dataUrl || record.photo || '',
-                JSON.stringify(photos),
-                ...getExtraMineralValues(record),
-                ownerEmail,
-                createdAt,
-            ], (error) => {
-                if (error) {
-                    failed = true;
-                }
+        const insertRecords = db.transaction(() => {
+            records.forEach((record) => {
+                const photos = normalizePhotos(record.photos ? safeParsePhotos(record.photos) : [], record.photo);
+                statement.run(
+                    record.specimenId,
+                    record.name,
+                    record.type,
+                    record.groupName,
+                    record.subgroup,
+                    record.date,
+                    record.origin,
+                    record.description,
+                    photos[0]?.dataUrl || record.photo || '',
+                    JSON.stringify(photos),
+                    ...getExtraMineralValues(record),
+                    ownerEmail,
+                    createdAt
+                );
             });
         });
 
-        statement.finalize((statementError) => {
-            if (statementError || failed) {
-                db.run('ROLLBACK', () => callback(statementError || new Error('CSV insert failed')));
-                return;
-            }
-
-            db.run('COMMIT', (commitError) => callback(commitError, records.length));
-        });
-    });
+        insertRecords();
+        callback(null, records.length);
+    } catch (error) {
+        callback(error);
+    }
 }
 
 app.use('/api', (req, res) => {
